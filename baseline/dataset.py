@@ -1,7 +1,7 @@
 import os
 from PIL import Image
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, random_split  # Aggiunto random_split
 
 class CCPDDataset(Dataset):
     def __init__(self, img_dir, transform=None):
@@ -33,3 +33,17 @@ class CCPDDataset(Dataset):
         x1, y1 = map(int, point1.split('&'))
         x2, y2 = map(int, point2.split('&'))
         return x1, y1, x2, y2
+
+
+def create_splits(dataset, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15):
+    total = len(dataset)
+    train_size = int(train_ratio * total)
+    val_size = int(val_ratio * total)
+    test_size = total - train_size - val_size
+    
+    train_set, val_set, test_set = random_split(
+        dataset, 
+        [train_size, val_size, test_size]
+    )
+    return train_set, val_set, test_set
+

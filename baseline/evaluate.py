@@ -65,7 +65,7 @@ def main():
 
     # Carica l'intero dataset
     # Modifica anche qui con il tuo path
-    dataset = CCPDDataset("../Downloads/CCPD2019/CCPD2019/ccpd_base", transform=transform)
+    dataset = CCPDDataset("F:\progetto computer vision\dataset\CCPD2019\ccpd_base", transform=transform)
     dataloader = DataLoader(dataset, batch_size=50, shuffle=False, num_workers=4)
 
     # Carica il modello
