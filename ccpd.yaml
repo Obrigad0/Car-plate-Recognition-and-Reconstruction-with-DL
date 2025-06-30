@@ -1,0 +1,5 @@
+path: ../../dataxyolo
+train: images/train
+val: images/val
+
+names: ['plate']  # classe unica: targa
