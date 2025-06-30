@@ -1,23 +1,46 @@
 import os
 from PIL import Image
 import torch
-from torch.utils.data import Dataset, random_split  # Aggiunto random_split
+from torch.utils.data import Dataset, random_split
+import numpy as np
 
 class CCPDDataset(Dataset):
-    def __init__(self, img_dir, transform=None):
-        self.img_dir = img_dir
-        self.filenames = [f for f in os.listdir(img_dir) if f.endswith('.jpg')]
+    def __init__(self, img_dir, mode='train', transform=None):
+        """
+        Args:
+            img_dir (str): Percorso della cartella principale del dataset
+            mode (str): 'train' per training/validation, 'evaluate' per test esterni
+            transform (callable, optional): Trasformazioni da applicare
+        """
         self.transform = transform
+        self.filenames = []
+        
+        if mode == 'train':
+            # Modalità training: usa solo ccpd_base
+            base_path = os.path.join(img_dir, 'ccpd_base')
+            self.filenames = [os.path.join(base_path, f) for f in os.listdir(base_path) if f.endswith('.jpg')]
+        elif mode == 'evaluate':
+            # Modalità evaluate: usa tutte le sottocartelle tranne ccpd_base
+            subfolders = ['ccpd_blur', 'ccpd_challenge', 'ccpd_db', 'ccpd_fn', 'ccpd_rotate', 'ccpd_tilt', 'ccpd_weather']
+            for folder in subfolders:
+                folder_path = os.path.join(img_dir, folder)
+                if os.path.exists(folder_path):
+                    self.filenames.extend([
+                        os.path.join(folder_path, f) 
+                        for f in os.listdir(folder_path) 
+                        if f.endswith('.jpg')
+                    ])
     
     def __len__(self):
         return len(self.filenames)
     
     def __getitem__(self, idx):
-        fname = self.filenames[idx]
-        img_path = os.path.join(self.img_dir, fname)
+        img_path = self.filenames[idx]
         image = Image.open(img_path).convert('RGB')
         
-        x1, y1, x2, y2 = self.extract_bbox(fname)
+        # Estrai bbox dal nome del file
+        filename = os.path.basename(img_path)
+        x1, y1, x2, y2 = self.extract_bbox(filename)
         w, h = image.size
         bbox = torch.tensor([x1/w, y1/h, x2/w, y2/h], dtype=torch.float32)
         
@@ -34,7 +57,6 @@ class CCPDDataset(Dataset):
         x2, y2 = map(int, point2.split('&'))
         return x1, y1, x2, y2
 
-
 def create_splits(dataset, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15):
     total = len(dataset)
     train_size = int(train_ratio * total)
@@ -46,4 +68,3 @@ def create_splits(dataset, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15):
         [train_size, val_size, test_size]
     )
     return train_set, val_set, test_set
-
