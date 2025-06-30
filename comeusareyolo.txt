@@ -8,4 +8,4 @@ Una volta che hai finito di creare il dataset, apri il terminale, vai nella cart
 
 python train.py --img 640 --batch 16 --epochs 1 --data ./data/ccpd.yaml --weights yolov5s.pt --cache
 
-cambi batch, epoch a tuo piacimento. Img indica la risoluzione a cui verrà ridotta ogni immagini (anche questo è modificabile)
+cambi batch, epoch a tuo piacimento. Img indica la risoluzione a cui verrà ridotta ogni immagine (anche questo è modificabile)
