@@ -1,0 +1,11 @@
+Come farlo funzionare:
+
+cloni yolov5 e segui le istruzioni sul loro GitHub per installare le librerie necessarie. Dopo di che scarichi dal nostro git il file ccpd.yaml e lo metti dentro yolov5/data. Devi modificare solo il percorso "path" basandoti su dove hai messo la cartella datixyolo che ho messo sempre su git.
+
+Scarichi quindi datixyolo e avvii il file crea_dataset.py dove devi modificare solo il percorso che porta alla cartella ccpd_base. 
+
+Una volta che hai finito di creare il dataset, apri il terminale, vai nella cartella yolov5 e fai:
+
+python train.py --img 640 --batch 16 --epochs 1 --data ./data/ccpd.yaml --weights yolov5s.pt --cache
+
+cambi batch, epoch a tuo piacimento. Img indica la risoluzione a cui verrà ridotta ogni immagini (anche questo è modificabile)
