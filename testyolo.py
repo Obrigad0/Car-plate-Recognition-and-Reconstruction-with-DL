@@ -42,7 +42,7 @@ def convert_to_yolo(x1, y1, x2, y2, img_w, img_h):
     return x_center, y_center, width, height
 
 # Scansiona tutte le cartelle CCPD eccetto CCPD_base
-ccpd_dirs = [d for d in os.listdir(base_dir) if d.startswith('ccpd_') and d != 'ccpd_base']
+ccpd_dirs = [d for d in os.listdir(base_dir) if d.startswith('ccpd_') and d != 'ccpd_base' and d != 'ccpd_np'] #togliamo ccpd_blur?
 
 for ccpd_name in ccpd_dirs:
     print(f'\nPreparazione e test su: {ccpd_name}')
