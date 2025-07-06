@@ -1,4 +1,4 @@
-path: ../../dataxyolo
+path: C:\\Users\\flavi\\OneDrive\\Documenti\\GitHub\\Car-plate-Recognition-and-Reconstruction-with-DL\\dataxyolo
 train: images/train
 val: images/val
 

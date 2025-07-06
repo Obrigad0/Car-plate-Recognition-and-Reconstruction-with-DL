@@ -108,7 +108,7 @@ def main():
     ])
     
     # Percorso dataset (modificare con il proprio)
-    dataset_path = "F:\\progetto computer vision\\dataset\\CCPD2019\\ccpd_base"
+    dataset_path = "F:\\progetto computer vision\\dataset\\CCPD2019"
     if not os.path.exists(dataset_path):
         raise FileNotFoundError(f"Percorso dataset non trovato: {dataset_path}")
     
@@ -118,15 +118,15 @@ def main():
     
     # Dataloader
     batch_size  = 50 
-    train_loader = DataLoader(train_data, batch_size = batch_size, shuffle=True, num_workers=12)
-    val_loader = DataLoader(val_data, batch_size = batch_size, shuffle=False, num_workers=12)
+    train_loader = DataLoader(train_data, batch_size = batch_size, shuffle=True, num_workers=10)
+    val_loader = DataLoader(val_data, batch_size = batch_size, shuffle=False, num_workers=10)
 
     # Inizializzazione modello (stessa istanza per tutte le epoche)
     model = ResNetBBoxModel(pretrained=True).to(device)
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
-    epochs = 15
+    epochs = 25
     best_val_loss = float('inf')
     history = {'train_loss': [], 'val_loss': [], 'train_iou': [], 'val_iou': []}
     

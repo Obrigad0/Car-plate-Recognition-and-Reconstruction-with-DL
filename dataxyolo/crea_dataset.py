@@ -4,10 +4,10 @@ import random
 from PIL import Image
 
 # Configurazioni
-images_path = '../../Downloads/CCPD2019/CCPD2019/ccpd_base'  # path immagini originali
-dataset_path = './datasets'
+images_path = 'F:\\progetto computer vision\\dataset\\CCPD2019\\ccpd_base'  # path immagini originali
+dataset_path = 'F:\\progetto computer vision\\dataxyolo'
 
-train_ratio = 0.8
+train_ratio = 0.5
 
 # Crea cartelle YOLO
 for folder in ['images/train', 'images/val', 'labels/train', 'labels/val']:
