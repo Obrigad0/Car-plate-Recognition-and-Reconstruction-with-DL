@@ -13,7 +13,7 @@ import shutil
 import sys
 import pathlib
 
-# === CONFIGURA ===
+# === CONFIGURA puzzette ===
 base_dir = 'F:\\progetto computer vision\\dataset\\CCPD2019'
 model_weights = './best.pt'
 img_size = 640
