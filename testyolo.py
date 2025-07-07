@@ -13,12 +13,6 @@ import shutil
 import sys
 import pathlib
 
-sys.modules["pathlib._local"] = pathlib 
-if os.name == 'nt':
-   pathlib.PosixPath = pathlib.WindowsPath
-else:
-   pathlib.WindowsPath = pathlib.PosixPath
-
 # === CONFIGURA ===
 base_dir = 'C:/Users/fedes/Downloads/CCPD2019/CCPD2019'
 model_weights = './best.pt'
