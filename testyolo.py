@@ -14,7 +14,7 @@ import sys
 import pathlib
 
 # === CONFIGURA ===
-base_dir = 'C:/Users/fedes/Downloads/CCPD2019/CCPD2019'
+base_dir = 'F:\\progetto computer vision\\dataset\\CCPD2019'
 model_weights = './best.pt'
 img_size = 640
 conf_threshold = 0.25
