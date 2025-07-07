@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sun Jul  6 06:18:54 2025
-
 @author: fedes
 """
 
@@ -9,15 +8,23 @@ import os
 import subprocess
 import yaml
 import cv2
+import time
+import shutil
+import sys
+import pathlib
+
+sys.modules["pathlib._local"] = pathlib 
+if os.name == 'nt':
+   pathlib.PosixPath = pathlib.WindowsPath
+else:
+   pathlib.WindowsPath = pathlib.PosixPath
 
 # === CONFIGURA ===
-base_dir = '../Downloads/CCPD2019/CCPD2019'   
-model_weights = '/percorso/al/modello/best.pt'
+base_dir = 'C:/Users/fedes/Downloads/CCPD2019/CCPD2019'
+model_weights = './best.pt'
 img_size = 640
-conf_threshold = 0.25 
+conf_threshold = 0.25
 output_dir = 'test_results'
-
-# Classe YOLO
 class_names = ['plate']
 
 os.makedirs(output_dir, exist_ok=True)
@@ -41,29 +48,28 @@ def convert_to_yolo(x1, y1, x2, y2, img_w, img_h):
     height = abs(y2 - y1) / img_h
     return x_center, y_center, width, height
 
-# Scansiona tutte le cartelle CCPD eccetto CCPD_base
-ccpd_dirs = [d for d in os.listdir(base_dir) if d.startswith('ccpd_') and d != 'ccpd_base' and d != 'ccpd_np'] #togliamo ccpd_blur?
+ccpd_dirs = [d for d in os.listdir(base_dir) if d.startswith('ccpd_') and d not in ['ccpd_base', 'ccpd_np', 'ccpd_blur']]
 
 for ccpd_name in ccpd_dirs:
-    print(f'\nPreparazione e test su: {ccpd_name}')
+    print(f'\n▶ Preparazione e test su: {ccpd_name}')
 
     ccpd_path = os.path.join(base_dir, ccpd_name)
-    labels_dir = os.path.join(ccpd_path, 'labels')
-    os.makedirs(labels_dir, exist_ok=True)
-
     image_files = [f for f in os.listdir(ccpd_path) if f.endswith('.jpg')]
 
     if not image_files:
         print(f" Nessuna immagine trovata in {ccpd_name}")
         continue
 
-    # === Estrai label dai nomi dei file ===
+    # === Crea strutture compatibili YOLOv5 ===
+    images_val_dir = os.path.join(ccpd_path, 'images', 'val')
+    labels_val_dir = os.path.join(ccpd_path, 'labels', 'val')
+    os.makedirs(images_val_dir, exist_ok=True)
+    os.makedirs(labels_val_dir, exist_ok=True)
+
     for img_name in image_files:
         img_path = os.path.join(ccpd_path, img_name)
-        label_path = os.path.join(labels_dir, os.path.splitext(img_name)[0] + '.txt')
-
-        if os.path.exists(label_path):
-            continue  # skip se già creato
+        label_name = os.path.splitext(img_name)[0] + '.txt'
+        label_path = os.path.join(labels_val_dir, label_name)
 
         img = cv2.imread(img_path)
         if img is None:
@@ -81,12 +87,14 @@ for ccpd_name in ccpd_dirs:
         with open(label_path, 'w') as f:
             f.write(f'0 {x_c:.6f} {y_c:.6f} {bw:.6f} {bh:.6f}\n')
 
+        dst_img_path = os.path.join(images_val_dir, img_name)
+        shutil.copy(img_path, dst_img_path)
+
     # === YAML ===
     yaml_path = os.path.join(output_dir, f'{ccpd_name}.yaml')
     yaml_data = {
         'path': ccpd_path,
-        'train': '.',  # dummy
-        'val': '.',
+        'val': 'images/val',
         'names': class_names
     }
 
@@ -94,6 +102,7 @@ for ccpd_name in ccpd_dirs:
         yaml.dump(yaml_data, f)
 
     # === YOLOv5 test ===
+    print(f"🔍 Avvio test YOLOv5 su {ccpd_name}")
     command = [
         'python', 'val.py',
         '--weights', model_weights,
@@ -106,6 +115,30 @@ for ccpd_name in ccpd_dirs:
         '--exist-ok'
     ]
 
-    subprocess.run(command)
+    start_time = time.time()
+    result = subprocess.run(command, capture_output=True, text=True)
+    end_time = time.time()
 
-    print("\nTutti i test completati.")
+    print("[YOLOv5 STDOUT]")
+    print(result.stdout)
+    print("[YOLOv5 STDERR]")
+    print(result.stderr)
+
+    elapsed_time = end_time - start_time
+    fps = len(image_files) / elapsed_time if elapsed_time > 0 else 0
+
+    results_txt = os.path.join(output_dir, ccpd_name, 'results.txt')
+    map_50 = 'N/A'
+    if os.path.exists(results_txt):
+        with open(results_txt, 'r') as f:
+            lines = f.readlines()
+            if len(lines) > 1:
+                last_line = lines[-1].strip().split()
+                map_50 = last_line[5] if len(last_line) >= 6 else 'N/A'
+
+    print(f"\n✅ RISULTATI: {ccpd_name}")
+    print(f" - Immagini processate: {len(image_files)}")
+    print(f" - Tempo totale: {elapsed_time:.2f} sec")
+    print(f" - FPS: {fps:.2f}")
+    print(f" - mAP@0.5: {map_50}")
+
