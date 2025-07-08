@@ -15,7 +15,7 @@ import pathlib
 
 # === CONFIGURA puzzette ===
 base_dir = 'F:\\progetto computer vision\\dataset\\CCPD2019'
-model_weights = './best.pt'
+model_weights = 'C:\\Users\\flavi\\OneDrive\\Documenti\\GitHub\\Car-plate-Recognition-and-Reconstruction-with-DL\\paper model\\yolo model trained\\weights'
 img_size = 640
 conf_threshold = 0.25
 output_dir = 'test_results'

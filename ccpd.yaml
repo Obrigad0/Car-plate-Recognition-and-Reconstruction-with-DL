@@ -1,5 +1,11 @@
-path: C:\\Users\\flavi\\OneDrive\\Documenti\\GitHub\\Car-plate-Recognition-and-Reconstruction-with-DL\\dataxyolo
+path: F:\\progetto computer vision\\dataxyolo
 train: images/train
 val: images/val
+test: images/test
 
 names: ['plate']  # classe unica: targa
+
+
+# python -W ignore  train.py --img 640 --batch 50 --epochs 15 --data ./data/ccpd.yaml --weights yolov5s.pt --workers 12 --device 0 
+
+# python -W ignore train.py --img 640 --batch 50 --epochs 15 --data ./data/ccpd.yaml --weights yolov5s.pt --workers 12 --device 0 --optimizer Adam  --cos-lr

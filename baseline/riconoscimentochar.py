@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Jul  7 10:04:29 2025
-
-@author: fedes
-"""
-
 import os
 import cv2
 import numpy as np
@@ -30,7 +23,7 @@ index_to_char = [
 ]
 char_to_index = {c: i for i, c in enumerate(index_to_char)}
 
-# ---------- DATASET ----------
+
 class CCPDCharacters(Dataset):
     def __init__(self, root_dir, files, transform=None):
         self.root_dir = root_dir
@@ -80,17 +73,32 @@ class CCPDCharacters(Dataset):
         for i in range(n_chars):
             x = i * char_width
             char = plate_img[:, x:x+char_width]
-            char = cv2.resize(char, (48, 48))  # Dimensione per VGG
+            char = cv2.resize(char, (48, 48))  # Dimensione per ResNet
             chars.append(char)
         return chars
 
-# ---------- MODEL VGG ----------
-def get_vgg_model(num_classes):
-    model = models.vgg16(pretrained=True)
-    model.classifier[6] = nn.Linear(model.classifier[6].in_features, num_classes)
-    return model
+def get_resnet_ocr_model(num_classes, backbone_weights_path=None):
+    model = models.resnet18(pretrained=False)
+    if backbone_weights_path is not None:
+        checkpoint = torch.load(backbone_weights_path, map_location='cpu')
+        # Carica SOLO i pesi del backbone (non la testa bbox)
+        backbone_state = {k.replace('backbone.', ''): v for k, v in checkpoint.items() if 'backbone' in k}
+        model.load_state_dict(backbone_state, strict=False)
+    num_features = model.fc.in_features
+    model.fc = nn.Identity()
+    ocr_head = nn.Linear(num_features, num_classes)
+    # Wrapper per forward compatibile con DataLoader [batch, 3, 48, 48]
+    class OCRModel(nn.Module):
+        def __init__(self, backbone, head):
+            super().__init__()
+            self.backbone = backbone
+            self.head = head
+        def forward(self, x):
+            feats = self.backbone(x)
+            out = self.head(feats)
+            return out
+    return OCRModel(model, ocr_head)
 
-# ---------- TRAINING ----------
 def train(model, train_loader, val_loader, device, epochs=5):
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     criterion = nn.CrossEntropyLoss()
@@ -123,7 +131,6 @@ def train(model, train_loader, val_loader, device, epochs=5):
         avg_val_loss = val_loss / len(val_loader)
         print(f"Epoch {epoch+1}: Train Loss = {avg_train_loss:.4f} | Val Loss = {avg_val_loss:.4f}")
 
-# ---------- TEST RANDOM IMAGE ----------
 def test_on_random_image(dataset, model, device, index_to_char):
     model.eval()
     idx = random.randint(0, len(dataset)-1)
@@ -144,7 +151,6 @@ def test_on_random_image(dataset, model, device, index_to_char):
     plt.show()
     print('Caratteri riconosciuti:', pred_str)
 
-# ---------- MAIN ----------
 def main():
     data_dir = 'F:\\progetto computer vision\\dataset\\CCPD2019\\ccpd_base'  # Cambia con il tuo path
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -158,14 +164,14 @@ def main():
 
     train_dataset = CCPDCharacters(data_dir, train_files, transform=transform)
     val_dataset = CCPDCharacters(data_dir, val_files, transform=transform)
-    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=12)
-    val_loader = DataLoader(val_dataset, batch_size=128, shuffle=False, num_workers=8)
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=12)
+    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=8)
 
-    model = get_vgg_model(num_classes=len(index_to_char))
+    model = get_resnet_ocr_model(num_classes=len(index_to_char), backbone_weights_path='best_model.pth')
     model.to(device)
     train(model, train_loader, val_loader, device, epochs=15)
-    torch.save(model.state_dict(), 'char_vgg.pth')
-    print("Modello salvato in char_vgg.pth")
+    torch.save(model.state_dict(), 'char_resnet.pth')
+    print("Modello salvato in char_resnet.pth")
     test_on_random_image(val_dataset, model, device, index_to_char)
 
 if __name__ == '__main__':
