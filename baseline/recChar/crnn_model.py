@@ -23,18 +23,19 @@ class CRNN(nn.Module):
             nn.MaxPool2d((2, 1)),
             nn.Conv2d(512, 512, 2, 1, 0), nn.ReLU()
         )
-        self.rnn = nn.Sequential(
-            nn.LSTM(512, nh, bidirectional=True),
-            nn.LSTM(nh * 2, nh, bidirectional=True)
-        )
+        self.rnn1 = nn.LSTM(512, nh, bidirectional=True)
+        self.rnn2 = nn.LSTM(nh * 2, nh, bidirectional=True)
         self.fc = nn.Linear(nh * 2, nclass)
 
     def forward(self, x):
         conv = self.cnn(x)
         b, c, h, w = conv.size()
-        assert h == 1
-        conv = conv.squeeze(2)
-        conv = conv.permute(2, 0, 1)  # [w, b, c]
-        rnn_out, _ = self.rnn(conv)
-        output = self.fc(rnn_out)
+        assert h == 1, f"Expected height = 1 after conv layers, got {h}"
+        conv = conv.squeeze(2)         # [B, C, W]
+        conv = conv.permute(2, 0, 1)   # [W, B, C]
+
+        rnn_out, _ = self.rnn1(conv)
+        rnn_out, _ = self.rnn2(rnn_out)
+
+        output = self.fc(rnn_out)      # [W, B, classes]
         return output
