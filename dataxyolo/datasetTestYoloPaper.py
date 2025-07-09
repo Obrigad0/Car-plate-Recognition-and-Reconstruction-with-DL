@@ -65,6 +65,7 @@ def create_test_folders(selected_test_type):
             with open(label_path, 'w') as f:
                 f.write(f"0 {x_center:.6f} {y_center:.6f} {w:.6f} {h:.6f}\n")
     print(f"Test set '{selected_test_type}' pronto!")
-
+#Fatti: ccpd_challenge, ccpd_blur , ccpd_db , ccpd_fn , ccpd_rotate ,  ccpd_tilt , ccpd_weather
+#Da Fare:
 # Esempio di uso: scegli la sottocartella di test che vuoi usare
-create_test_folders('ccpd_blur')  # oppure 'type2', 'type3', ecc.
+create_test_folders('ccpd_weather')  # oppure 'type2', 'type3', ecc.
