@@ -1,178 +1,194 @@
 import os
-import cv2
-import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
+import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, models
+from PIL import Image
 from tqdm import tqdm
 import random
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
 
-# ---------- CHAR MAPPING ----------
+# ----------------- MAPPING CARATTERI -----------------
 index_to_char = [
-    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K',
-    'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
-    'W', 'X', 'Y', 'Z',
-    '川', '鄂', '赣', '甘', '贵', '桂', '黑', '沪', '冀', '津',
-    '晋', '辽', '鲁', '蒙', '闽', '宁', '青', '琼', '陕', '苏',
-    '皖', '湘', '新', '渝', '豫', '粤', '云', '浙'
+    "皖", "沪", "津", "渝", "冀", "晋", "蒙", "辽", "吉", "黑", "苏", "浙", "京", "闽", "赣", "鲁", "豫", "鄂",
+    "湘", "粤", "桂", "琼", "川", "贵", "云", "藏", "陕", "甘", "青", "宁", "新", "警", "学", "O",
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
+    'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
 ]
 char_to_index = {c: i for i, c in enumerate(index_to_char)}
+NUM_CLASSES = len(index_to_char)
+NUM_CHARS = 7  # Numero di caratteri targa
 
-
-class CCPDCharacters(Dataset):
-    def __init__(self, root_dir, files, transform=None):
-        self.root_dir = root_dir
+# ----------------- DATASET -----------------
+class CCPDCharCropDataset(Dataset):
+    def __init__(self, images_dir, labels_path, transform=None):
+        self.images_dir = images_dir
         self.transform = transform
-        self.files = files
+        self.samples = []
+        with open(labels_path, encoding='utf-8') as f:
+            for line in f:
+                img_name, label = line.strip().split('\t')
+                self.samples.append((img_name, label))
 
     def __len__(self):
-        return len(self.files)
+        return len(self.samples)
 
     def __getitem__(self, idx):
-        while True:
-            fname = self.files[idx]
-            img_path = os.path.join(self.root_dir, fname)
-            img = cv2.imread(img_path)
-            try:
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                parts = fname.split('-')
-                if len(parts) < 5:
-                    raise Exception("Formato filename errato")
-                points_str = parts[3].split('_')
-                points = [tuple(map(int, p.split('&'))) for p in points_str]
-                if len(points) != 4:
-                    raise Exception(f"Punti non validi: {points}")
-                warped = self.warp_plate(img, points)
-                chars = self.segment_characters(warped)
-                labels = list(map(int, parts[4].split('_')))
-                if len(labels) < len(chars):
-                    raise Exception(f"Etichette troppo corte: {labels}")
-                labels = labels[:len(chars)]
-                if self.transform:
-                    chars = [self.transform(c) for c in chars]
-                return torch.stack(chars), torch.tensor(labels)
-            except Exception as e:
-                print(f"[ERRORE]: {fname} → {e}")
-                idx = (idx + 1) % len(self.files)
+        img_name, label = self.samples[idx]
+        img_path = os.path.join(self.images_dir, img_name)
+        img = Image.open(img_path).convert('RGB')
+        if self.transform:
+            img = self.transform(img)
+        label_indices = torch.tensor([char_to_index[c] for c in label])
+        return img, label_indices
 
-    def warp_plate(self, image, points):
-        pts = np.array(points, dtype='float32')
-        dst_pts = np.array([[0, 0], [136, 0], [136, 36], [0, 36]], dtype='float32')
-        M = cv2.getPerspectiveTransform(pts, dst_pts)
-        return cv2.warpPerspective(image, M, (136, 36))
+# ----------------- MODELLO OCR PROFONDO -----------------
+class OCRResNetMultiHead(nn.Module):
+    def __init__(self, backbone, num_chars=NUM_CHARS, num_classes=NUM_CLASSES):
+        super().__init__()
+        self.backbone = backbone  # backbone già caricato e senza fc
+        if hasattr(self.backbone, 'fc') and not isinstance(self.backbone.fc, nn.Identity):
+            num_features = self.backbone.fc.in_features
+        else:
+                num_features = 512  # o il valore corretto per il tuo backbone
 
-    def segment_characters(self, plate_img, n_chars=7):
-        h, w = plate_img.shape[:2]
-        char_width = w // n_chars
-        chars = []
-        for i in range(n_chars):
-            x = i * char_width
-            char = plate_img[:, x:x+char_width]
-            char = cv2.resize(char, (48, 48))  # Dimensione per ResNet
-            chars.append(char)
-        return chars
+        # Testa OCR profonda
+        self.ocr_head = nn.Sequential(
+            nn.Linear(num_features, 1024),
+            nn.BatchNorm1d(1024),
+            nn.ReLU(),
+            nn.Dropout(0.4),
+            nn.Linear(1024, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(512, 256),
+            nn.ReLU()
+        )
+        self.ocr_class_heads = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(256, 128),
+                nn.ReLU(),
+                nn.Dropout(0.2),
+                nn.Linear(128, num_classes)
+            ) for _ in range(num_chars)
+        ])
 
-def get_resnet_ocr_model(num_classes, backbone_weights_path=None):
-    model = models.resnet18(pretrained=False)
-    if backbone_weights_path is not None:
-        checkpoint = torch.load(backbone_weights_path, map_location='cpu')
-        # Carica SOLO i pesi del backbone (non la testa bbox)
-        backbone_state = {k.replace('backbone.', ''): v for k, v in checkpoint.items() if 'backbone' in k}
-        model.load_state_dict(backbone_state, strict=False)
-    num_features = model.fc.in_features
-    model.fc = nn.Identity()
-    ocr_head = nn.Linear(num_features, num_classes)
-    # Wrapper per forward compatibile con DataLoader [batch, 3, 48, 48]
-    class OCRModel(nn.Module):
-        def __init__(self, backbone, head):
-            super().__init__()
-            self.backbone = backbone
-            self.head = head
-        def forward(self, x):
-            feats = self.backbone(x)
-            out = self.head(feats)
-            return out
-    return OCRModel(model, ocr_head)
+    def forward(self, x):
+        feats = self.backbone(x)
+        ocr_feats = self.ocr_head(feats)
+        outs = [head(ocr_feats) for head in self.ocr_class_heads]
+        return outs  # lista di [batch, num_classes] per ogni carattere
 
-def train(model, train_loader, val_loader, device, epochs=5):
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    criterion = nn.CrossEntropyLoss()
-    for epoch in range(epochs):
-        model.train()
-        total_loss = 0
-        for imgs, labels in tqdm(train_loader, desc=f"Epoch {epoch+1} [Train]"):
-            b, n, c, h, w = imgs.size()
-            imgs = imgs.view(-1, c, h, w).to(device)
-            labels = labels.view(-1).to(device)
-            outputs = model(imgs)
-            loss = criterion(outputs, labels)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+# ----------------- LOSS OCR MULTI-CHAR -----------------
+def multi_char_loss(outputs, labels):
+    loss = 0
+    for i, out in enumerate(outputs):
+        loss += F.cross_entropy(out, labels[:, i])
+    return loss / len(outputs)
+
+# ----------------- TRAINING E VALIDAZIONE -----------------
+def train_epoch(model, loader, optimizer, device):
+    model.train()
+    total_loss = 0
+    for imgs, labels in tqdm(loader, desc="Train"):
+        imgs, labels = imgs.to(device), labels.to(device)
+        optimizer.zero_grad()
+        ocr_outputs = model(imgs)
+        loss = multi_char_loss(ocr_outputs, labels)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+    return total_loss / len(loader)
+
+def val_epoch(model, loader, device):
+    model.eval()
+    total_loss = 0
+    with torch.no_grad():
+        for imgs, labels in tqdm(loader, desc="Val"):
+            imgs, labels = imgs.to(device), labels.to(device)
+            ocr_outputs = model(imgs)
+            loss = multi_char_loss(ocr_outputs, labels)
             total_loss += loss.item()
-        avg_train_loss = total_loss / len(train_loader)
+    return total_loss / len(loader)
 
-        # VALIDATION
-        model.eval()
-        val_loss = 0
-        with torch.no_grad():
-            for imgs, labels in val_loader:
-                b, n, c, h, w = imgs.size()
-                imgs = imgs.view(-1, c, h, w).to(device)
-                labels = labels.view(-1).to(device)
-                outputs = model(imgs)
-                loss = criterion(outputs, labels)
-                val_loss += loss.item()
-        avg_val_loss = val_loss / len(val_loader)
-        print(f"Epoch {epoch+1}: Train Loss = {avg_train_loss:.4f} | Val Loss = {avg_val_loss:.4f}")
+# ----------------- DECODE PREDICTION -----------------
+def decode_prediction(outputs):
+    preds = [torch.argmax(out, dim=1) for out in outputs]
+    preds = torch.stack(preds, dim=1)
+    return [''.join([index_to_char[i] for i in row]) for row in preds.cpu().numpy()]
 
-def test_on_random_image(dataset, model, device, index_to_char):
+# ----------------- TEST SU IMMAGINE RANDOM -----------------
+def test_on_random_image(dataset, model, device):
     model.eval()
     idx = random.randint(0, len(dataset)-1)
-    chars_imgs, _ = dataset[idx]  # chars_imgs: [n_chars, 3, 48, 48]
-    chars_imgs = chars_imgs.to(device)
+    img, label = dataset[idx]
+    img_input = img.unsqueeze(0).to(device)
     with torch.no_grad():
-        outputs = model(chars_imgs)
-        preds = outputs.argmax(dim=1).cpu().numpy()
-    pred_str = ''.join([index_to_char[i] for i in preds])
-    # Visualizza i caratteri segmentati
-    fig, axes = plt.subplots(1, len(chars_imgs), figsize=(12, 2))
-    for i, ax in enumerate(axes):
-        img = chars_imgs[i].cpu().numpy().transpose(1, 2, 0)
-        img = (img * 0.5 + 0.5).clip(0, 1)
-        ax.imshow(img)
-        ax.axis('off')
-    plt.suptitle(f'Predicted: {pred_str}')
+        ocr_outputs = model(img_input)
+        pred_indices = [torch.argmax(out, dim=1).item() for out in ocr_outputs]
+    pred_str = ''.join([index_to_char[i] for i in pred_indices])
+    gt_str = ''.join([index_to_char[i] for i in label.numpy()])
+    img_np = img.permute(1, 2, 0).cpu().numpy()
+    img_np = (img_np * 0.5 + 0.5).clip(0, 1)
+    plt.imshow(img_np)
+    plt.title(f"Pred: {pred_str} | GT: {gt_str}")
+    plt.axis('off')
     plt.show()
     print('Caratteri riconosciuti:', pred_str)
+    print('Ground Truth:', gt_str)
 
+# ----------------- MAIN -----------------
 def main():
-    data_dir = 'F:\\progetto computer vision\\dataset\\CCPD2019\\ccpd_base'  # Cambia con il tuo path
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # Sostituisci con i tuoi path reali
+    train_images = 'F:/progetto computer vision/dataxricChar/train/images'
+    train_labels = 'F:/progetto computer vision/dataxricChar/train/labels.txt'
+    val_images = 'F:/progetto computer vision/dataxricChar/val/images'
+    val_labels = 'F:/progetto computer vision/dataxricChar/val/labels.txt'
+
     transform = transforms.Compose([
+        transforms.Resize((48, 168)),
         transforms.ToTensor(),
         transforms.Normalize([0.5]*3, [0.5]*3)
     ])
 
-    all_files = [f for f in os.listdir(data_dir) if f.endswith('.jpg')]
-    train_files, val_files = train_test_split(all_files, test_size=0.2, random_state=42)
+    train_dataset = CCPDCharCropDataset(train_images, train_labels, transform)
+    val_dataset = CCPDCharCropDataset(val_images, val_labels, transform)
 
-    train_dataset = CCPDCharacters(data_dir, train_files, transform=transform)
-    val_dataset = CCPDCharacters(data_dir, val_files, transform=transform)
-    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=12)
-    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=8)
+    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=12)
+    val_loader = DataLoader(val_dataset, batch_size=128, shuffle=False, num_workers=8)
 
-    model = get_resnet_ocr_model(num_classes=len(index_to_char), backbone_weights_path='best_model.pth')
-    model.to(device)
-    train(model, train_loader, val_loader, device, epochs=15)
-    torch.save(model.state_dict(), 'char_resnet.pth')
-    print("Modello salvato in char_resnet.pth")
-    test_on_random_image(val_dataset, model, device, index_to_char)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # --------- CARICA BACKBONE DA FILE ----------
+    backbone = models.resnet18(pretrained=False)
+    backbone.fc = nn.Identity()
+    # Carica i pesi del backbone addestrato per detection
+    checkpoint = torch.load('./modelli/best_model.pth', map_location='cuda')
+    backbone.load_state_dict(checkpoint, strict=False)
+
+    # --------- CREA MODELLO OCR PROFONDO ----------
+    model = OCRResNetMultiHead(backbone, num_chars=NUM_CHARS, num_classes=NUM_CLASSES).to(device)
+    for name, param in model.backbone.named_parameters():
+        param.requires_grad = 'layer4' in name
+    optimizer = torch.optim.AdamW(
+        filter(lambda p: p.requires_grad, model.parameters()), #model.parameters(),
+        lr=0.001,
+        weight_decay=3e-4)
+    epochs = 20
+
+    for epoch in range(epochs):
+        print(f"Epoch {epoch+1}/{epochs}")
+        train_loss = train_epoch(model, train_loader, optimizer, device)
+        val_loss = val_epoch(model, val_loader, device)
+        print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+
+    torch.save(model.state_dict(), 'ocr_from_detection_backbone.pth')
+    print("Modello OCR salvato in ocr_from_detection_backbone.pth")
+
+    # Test su un'immagine random del validation set
+    test_on_random_image(val_dataset, model, device)
 
 if __name__ == '__main__':
     main()

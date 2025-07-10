@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 from dataset import CCPDDataset, create_splits  # Importa create_splits
-from model import ResNetBBoxModel
+from model import UnifiedResNetModel
 import torch.optim as optim
 import torch.nn as nn
 from tqdm import tqdm
@@ -122,7 +122,7 @@ def main():
     val_loader = DataLoader(val_data, batch_size = batch_size, shuffle=False, num_workers=10)
 
     # Inizializzazione modello (stessa istanza per tutte le epoche)
-    model = ResNetBBoxModel(pretrained=True).to(device)
+    model = UnifiedResNetModel(pretrained=True).to(device)
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
