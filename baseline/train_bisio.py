@@ -82,7 +82,7 @@ def main():
         transforms.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225]),
     ])
 
-    ds_path = "C:/Users/fedes/Downloads/CCPD2019/CCPD2019"
+    ds_path = "F:\\progetto computer vision\\dataset\\CCPD2019"
     if not os.path.exists(ds_path):
         raise FileNotFoundError(ds_path)
 
