@@ -1,207 +1,173 @@
-# train_pdlpr.py
-
 import os
-import random
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+import torch.optim as optim
+import torch.utils.data as data
 from torchvision import transforms
 from PIL import Image
-import matplotlib.pyplot as plt
-import numpy as np
 from tqdm import tqdm
-from pdlpr import PDLPR
 
-# -------------------------------
-# 1. Dataset personalizzato CCPD
-# -------------------------------
+# -- Mappa dei caratteri del dataset CCPD Base (modifica se hai una label map diversa) --
+CHARS = ['皖', '沪', '津', '渝', '冀', '晋', '蒙', '辽', '吉', '黑', '苏', '浙', '京', '闽', '赣', '鲁', '豫', '鄂',
+         '湘', '粤', '桂', '琼', '川', '贵', '云', '藏', '陕', '甘', '青', '宁', '新', '警', '学', 'O', # province (34)
+         'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W',
+         'X', 'Y', 'Z', 'O', # alphabet (24+1 O)
+         '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'] # digit (10+O?) , 'O'
+CHAR2IDX = {ch:i for i, ch in enumerate(CHARS)}
+NUM_CLASSES = len(CHARS)
+SEQ_LEN = 7 # Lunghezza delle targhe CCPD
 
-class CCPDDataset(Dataset):
-    def __init__(self, images_dir, labels_path, char2idx, seq_len=18, transform=None):
-        self.images_dir = images_dir
+# --- DATASET ---
+class LicensePlateDataset(data.Dataset):
+    def __init__(self, img_dir, label_file, img_size=(48, 144), transform=None):
+        self.img_dir = img_dir
+        self.img_size = img_size
         self.transform = transform
-        self.seq_len = seq_len
-        self.char2idx = char2idx
-
-        with open(labels_path, 'r', encoding='utf-8') as f:
-            self.samples = [line.strip().split('\t') for line in f.readlines()]
+        self.samples = []
+        with open(label_file, encoding='utf-8') as f:
+            for line in f:
+                name, label = line.strip().split('\t')
+                self.samples.append((name, label))
 
     def __len__(self):
         return len(self.samples)
 
     def encode_label(self, label):
-        label_idx = [self.char2idx.get(c, self.char2idx['[UNK]']) for c in label]
-        if len(label_idx) < self.seq_len:
-            label_idx += [self.char2idx['[PAD]']] * (self.seq_len - len(label_idx))
-        else:
-            label_idx = label_idx[:self.seq_len]
-        return torch.tensor(label_idx, dtype=torch.long)
+        return [CHAR2IDX[c] for c in label]
 
     def __getitem__(self, idx):
-        img_name, label = self.samples[idx]
-        img_path = os.path.join(self.images_dir, img_name)
-        image = Image.open(img_path).convert('RGB')
-        if self.transform:
-            image = self.transform(image)
+        name, label = self.samples[idx]
+        img_path = os.path.join(self.img_dir, name)
+        img = Image.open(img_path).convert('RGB').resize(self.img_size[::-1], Image.BILINEAR)
+        if self.transform: img = self.transform(img)
         label_encoded = self.encode_label(label)
-        return image, label_encoded, img_name
+        label_tensor = torch.LongTensor(label_encoded)
+        return img, label_tensor, len(label_encoded)
 
-# -------------------------------
-# 2. Dizionario caratteri
-# -------------------------------
+# --- DATA AUGMENTATION ---
+def get_transforms(is_train):
+    aug = []
+    if is_train:
+        aug.extend([
+            transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.2, hue=0.02),
+            transforms.RandomAffine(degrees=4, translate=(.04,.12), scale=(.92,1.08))
+            # Aggiungi altre randomizzazioni se vuoi
+        ])
+    aug.append(transforms.ToTensor())
+    return transforms.Compose(aug)
 
-ALL_CHARS = (
-    ["皖", "沪", "津", "渝", "冀", "晋", "蒙", "辽", "吉", "黑", "苏", "浙", "京", "闽", "赣", "鲁", "豫", "鄂",
-     "湘", "粤", "桂", "琼", "川", "贵", "云", "藏", "陕", "甘", "青", "宁", "新", "警", "学", "O"] +
-    ['A','B','C','D','E','F','G','H','J','K','L','M','N','P','Q','R','S','T','U','V','W','X','Y','Z','O'] +
-    ['0','1','2','3','4','5','6','7','8','9','O']
-)
-ALL_CHARS = list(dict.fromkeys(ALL_CHARS))
-ALL_CHARS = ['[PAD]', '[UNK]'] + ALL_CHARS
+# --- COLLATE FUNCTION per batch CTC ---
+def ctc_collate(batch):
+    imgs, labels, label_lens = zip(*batch)
+    imgs = torch.stack(imgs)
+    labels = torch.cat([l for l in labels])
+    label_lens = torch.tensor(label_lens)
+    return imgs, labels, label_lens
 
-char2idx = {c: i for i, c in enumerate(ALL_CHARS)}
-idx2char = {i: c for c, i in char2idx.items()}
-
-# -------------------------------
-# 3. Trasformazioni immagini
-# -------------------------------
-
-transform = transforms.Compose([
-    transforms.Resize((96, 288)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-])
-
-# -------------------------------
-# 4. Hyperparametri (dal paper)
-# -------------------------------
-
+# -- Training hyperparams --
 BATCH_SIZE = 128
-NUM_EPOCHS = 15
-LEARNING_RATE = 1e-3
-SEQ_LEN = 18
-NUM_CLASSES = len(char2idx)
-DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+VAL_BATCH_SIZE = 5
+IMG_SIZE = (96, 288)
+EPOCHS = 20
+INIT_LR = 1e-2
+LR_MIN = 1e-5
+DECAY_EVERY = 206
+DECAY_FACTOR = 0.9
 
-# -------------------------------
-# 5. Caricamento dati
-# -------------------------------
+# -- Carica dati --
+DATA_ROOT = 'F:/progetto computer vision/dataxricChar/'
+train_set = LicensePlateDataset(
+    img_dir=os.path.join(DATA_ROOT, 'train', 'images'),
+    label_file=os.path.join(DATA_ROOT, 'train', 'labels.txt'),
+    img_size=IMG_SIZE,
+    transform=get_transforms(True)
+)
+val_set = LicensePlateDataset(
+    img_dir=os.path.join(DATA_ROOT, 'val', 'images'),
+    label_file=os.path.join(DATA_ROOT, 'val', 'labels.txt'),
+    img_size=IMG_SIZE,
+    transform=get_transforms(False)
+)
+train_loader = data.DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, collate_fn=ctc_collate, drop_last=True, num_workers=0, pin_memory=True)
+val_loader = data.DataLoader(val_set, batch_size=VAL_BATCH_SIZE, shuffle=False, collate_fn=ctc_collate, num_workers=0)
 
-train_img_dir = 'F:/progetto computer vision/dataxricChar/train/images'
-train_label_path = 'F:/progetto computer vision/dataxricChar/train/labels.txt'
-val_img_dir = 'F:/progetto computer vision/dataxricChar/val/images'
-val_label_path = 'F:/progetto computer vision/dataxricChar/val/labels.txt'
-
-train_dataset = CCPDDataset(train_img_dir, train_label_path, char2idx, seq_len=SEQ_LEN, transform=transform)
-val_dataset = CCPDDataset(val_img_dir, val_label_path, char2idx, seq_len=SEQ_LEN, transform=transform)
-
-train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
-val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
-
-# -------------------------------
-# 6. Modello, loss, ottimizzatore
-# -------------------------------
-
+# --- MODELLI ---
+from pdlpr import PDLPR # Inserisci qui il tuo modello
 model = PDLPR(in_channels=3, d_model=512, n_heads=8, num_units=3, seq_len=SEQ_LEN, num_classes=NUM_CLASSES)
-model = model.to(DEVICE)
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+model = model.to(device)
 
-criterion = nn.CrossEntropyLoss(ignore_index=char2idx['[PAD]'])
-optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+# --- LOSS e OPTIMIZER ---
+ctc_loss = nn.CTCLoss(blank=NUM_CLASSES-1, zero_infinity=True)
+optimizer = optim.Adam(model.parameters(), lr=INIT_LR)
 
-# -------------------------------
-# 7. Training loop con decodifica predizioni
-# -------------------------------
+# --- LR Scheduler ---
+def adjust_lr(optimizer, factor):
+    for param_group in optimizer.param_groups:
+        old_lr = param_group["lr"]
+        new_lr = max(LR_MIN, old_lr * factor)
+        param_group["lr"] = new_lr
 
-def decode_sequence(seq_tensor, idx2char):
-    # seq_tensor: [seq_len] o [B, seq_len]
-    if seq_tensor.dim() == 1:
-        return ''.join([idx2char[idx.item()] for idx in seq_tensor if idx2char[idx.item()] not in ['[PAD]', '[UNK]']])
-    else:
-        return [''.join([idx2char[idx.item()] for idx in seq if idx2char[idx.item()] not in ['[PAD]', '[UNK]']]) for seq in seq_tensor]
-
-def train_one_epoch(model, loader, criterion, optimizer, device, idx2char):
+# --- TRAIN LOOP ---
+def train_one_epoch(epoch):
     model.train()
-    total_loss = 0
-    progress_bar = tqdm(loader, desc="Training", leave=False)
-    for images, labels, _ in progress_bar:
-        images = images.to(device)
-        labels = labels.to(device)
-        # print(labels[0])
+    total_loss, total_count = 0, 0
+    pbar = tqdm(train_loader, desc=f"Epoch {epoch}")
+    for imgs, labels, label_lens in pbar:
+        imgs = imgs.to(device)
+        targets = labels.to(device)
+        label_lens = label_lens.to(device)
+        batch_size = imgs.size(0)
+        # Model output: [B, seq_len, num_classes] → [seq_len, B, num_classes] for CTC
+        logits = model(imgs)       # [B, seq_len, num_classes]
+        log_probs = logits.log_softmax(-1).transpose(0, 1)   # [seq_len, B, num_classes]
+        input_lengths = torch.full((batch_size,), log_probs.size(0), dtype=torch.long).to(device)
+        loss = ctc_loss(log_probs, targets, input_lengths, label_lens)
         optimizer.zero_grad()
-        outputs = model(images)  # [B, seq_len, num_classes]
-        outputs = outputs.permute(0, 2, 1)  # [B, num_classes, seq_len]
-        loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
-        total_loss += loss.item()
-        progress_bar.set_postfix(loss=total_loss / (progress_bar.n + 1))
-        # Decodifica e stampa alcune predizioni per debug (solo il primo batch per epoca)
-        if progress_bar.n == 0:
-            preds = outputs.permute(0, 2, 1).argmax(dim=2)  # [B, seq_len]
-            pred_strs = decode_sequence(preds.cpu(), idx2char)
-            label_strs = decode_sequence(labels.cpu(), idx2char)
-            for i in range(min(3, len(pred_strs))):
-                print(f"[DEBUG] GT: {label_strs[i]} | Pred: {pred_strs[i]}")
-    return total_loss / len(loader)
+        total_loss += loss.item() * batch_size
+        total_count += batch_size
+        pbar.set_postfix(loss=loss.item())
+    return total_loss / total_count
 
-def validate(model, loader, criterion, device, idx2char):
+def evaluate():
     model.eval()
-    total_loss = 0
-    total_correct = 0
-    total_samples = 0
-    shown = 0
-    progress_bar = tqdm(loader, desc="Validating", leave=False)
+    total_loss, total_count = 0, 0
     with torch.no_grad():
-        for images, labels, _ in progress_bar:
-            images = images.to(device)
-            labels = labels.to(device)
-            outputs = model(images)  # [B, seq_len, num_classes]
-            loss = criterion(outputs.permute(0, 2, 1), labels)
-            total_loss += loss.item()
-            preds = outputs.argmax(dim=2)  # [B, seq_len]
-            mask = (labels != char2idx['[PAD]'])
-            total_correct += ((preds == labels) & mask).sum().item()
-            total_samples += mask.sum().item()
-            progress_bar.set_postfix(loss=total_loss / (progress_bar.n + 1))
-    acc = total_correct / total_samples if total_samples > 0 else 0
-    return total_loss / len(loader), acc
+        pbar = tqdm(val_loader, desc="Validation")
+        for imgs, labels, label_lens in pbar:
+            imgs = imgs.to(device)
+            targets = labels.to(device)
+            label_lens = label_lens.to(device)
+            batch_size = imgs.size(0)
+            logits = model(imgs)
+            log_probs = logits.log_softmax(-1).transpose(0, 1)
+            input_lengths = torch.full((batch_size,), log_probs.size(0), dtype=torch.long).to(device)
+            loss = ctc_loss(log_probs, targets, input_lengths, label_lens)
+            total_loss += loss.item() * batch_size
+            total_count += batch_size
+            pbar.set_postfix(loss=loss.item())
+    return total_loss / total_count
 
 
-# -------------------------------
-# 8. Main training script
-# -------------------------------
+# -- TRAINING e VALIDATION PRINCIPALE --
+best_val_loss = float("inf")
+epochs_since_lr_decay = 0
+for epoch in range(1, EPOCHS + 1):
+    train_loss = train_one_epoch(epoch)
+    val_loss = evaluate()
+    print(f"[Epoch {epoch}] Train loss: {train_loss:.4f} | Val loss: {val_loss:.4f}")
 
-for epoch in range(NUM_EPOCHS):
-    train_loss = train_one_epoch(model, train_loader, criterion, optimizer, DEVICE, idx2char)
-    val_loss, val_acc = validate(model, val_loader, criterion, DEVICE, idx2char)
-    print(f"Epoch {epoch+1}/{NUM_EPOCHS} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.4f}")
-    if (epoch+1) % 20 == 0:
-        for g in optimizer.param_groups:
-            g['lr'] *= 0.9
+    # Salva modello migliore
+    if val_loss < best_val_loss:
+        best_val_loss = val_loss
+        torch.save(model.state_dict(), 'best_pdlpr.pth')
+        print("** Miglior modello salvato! **")
 
-torch.save(model.state_dict(), 'pdlpr_trained.pth')
-
-# -------------------------------
-# 9. Funzione di test post-training
-# -------------------------------
-
-def test_random_val_image(model, val_dataset, idx2char, device):
-    model.eval()
-    idx = random.randint(0, len(val_dataset)-1)
-    image, label, img_name = val_dataset[idx]
-    input_img = image.unsqueeze(0).to(device)
-    with torch.no_grad():
-        output = model(input_img)  # [1, seq_len, num_classes]
-        pred_seq = output.argmax(dim=2).squeeze(0).cpu().numpy()
-    label_str = ''.join([idx2char[i] for i in label if idx2char[i] not in ['[PAD]', '[UNK]']])
-    pred_str = ''.join([idx2char[i] for i in pred_seq if idx2char[i] not in ['[PAD]', '[UNK]']])
-    img_np = image.permute(1,2,0).numpy()
-    img_np = (img_np * 0.5 + 0.5).clip(0,1)
-    plt.imshow(img_np)
-    plt.title(f"GT: {label_str}\nPred: {pred_str}")
-    plt.axis('off')
-    plt.show()
-    print(f"Immagine: {img_name}\nGT: {label_str}\nPred: {pred_str}")
-
-# Esempio di utilizzo dopo il training:
-test_random_val_image(model, val_dataset, idx2char, DEVICE)
+    # Decresci learning rate se la validation non migliora ogni DECAY_EVERY
+    epochs_since_lr_decay += 1
+    if epochs_since_lr_decay >= DECAY_EVERY and val_loss >= best_val_loss:
+        adjust_lr(optimizer, DECAY_FACTOR)
+        print(f"** LR decayed, nuova lr: {[g['lr'] for g in optimizer.param_groups]} **")
+        epochs_since_lr_decay = 0

@@ -183,7 +183,7 @@ class ParallelDecoder(nn.Module):
         return logits
 
 # --- PLDPR Model ---
-class PLDPR(nn.Module):
+class PDLPR(nn.Module):
     def __init__(self, in_channels=3, d_model=512, n_heads=8, num_units=3, seq_len=18, num_classes=68):
         super().__init__()
         self.igfe = IGFE(in_channels, d_model)

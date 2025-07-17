@@ -6,11 +6,11 @@ from model import rebuild_model_from_parts
 # from tuo_file_modello import UnifiedResNetModel, split_model_and_save, rebuild_model_from_parts
 
 # Parametri di esempio
-head_type = 'bbox'   # puoi cambiare in 'bbox'
+head_type = 'ocr'   # puoi cambiare in 'bbox' o 'ocr'
 num_chars = 7
 num_classes = 68
 
-# # 1. Crea il modello
+# 1. Crea il modello
 # model = UnifiedResNetModel(
 #     head_type=head_type,
 #     pretrained=False,
@@ -18,16 +18,16 @@ num_classes = 68
 #     num_classes=num_classes
 # )
 
-# checkpoint = torch.load('./modelli/best_model.pth', map_location='cpu')
+# checkpoint = torch.load('./ocr_from_detection_with_ewc.pth', map_location='cpu')
 # model.load_state_dict(checkpoint)
 # # 2. Scomponi e salva
-# split_model_and_save(model, head_path='bbox_head.pth', backbone_path='backbone_vecchio_della_parte_solo_base_yolo.pth')
+# split_model_and_save(model, head_path='LPD_head.pth', backbone_path='backbone_nuovo.pth')
 # print("Backbone e parte lineare salvati separatamente.")
 
 # 3. Ricomponi il modello dai file salvati
 model_loaded = rebuild_model_from_parts(
     head_type='bbox',
-    backbone_path='backbone.pth',
+    backbone_path='backbone_vecchio_della_parte_solo_base_yolo.pth',
     head_path='bbox_head.pth',
     num_chars=num_chars,
     num_classes=num_classes,
