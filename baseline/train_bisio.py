@@ -143,18 +143,18 @@ def main():
                 'epoch': epoch,
                 'best_loss': best_loss
             }, "best_model_bbox.pth")
-            print("✅ Saved best model")
+            print("Saved best model")
             early_stop = 0
         else:
             early_stop += 1
             if early_stop >= max_patience:
-                print("🛑 Early stopping")
+                print("Early stopping")
                 break
             
     # Grafici bellissimi
     plot_metrics(epochs, train_losses, val_losses, 'Loss', 'loss_plot.png')
     plot_metrics(epochs, train_ious, val_ious, 'IoU', 'iou_plot.png')
-    print("📈 Plots saved: loss_plot.png, iou_plot.png")
+    print("Plots saved: loss_plot.png, iou_plot.png")
     plt.show()
 
 
