@@ -57,7 +57,7 @@ def prepare_ccpd_dataset(ccpd_dir, output_dir, max_images=None, train_split=0.5)
                 img_path = os.path.join(ccpd_dir, img_name)
                 img = Image.open(img_path)
                 crop = img.crop(bbox)
-                crop = crop.resize((288, 96), Image.BILINEAR)
+                crop = crop.resize((144, 48), Image.BILINEAR)
                 new_img_name = f'{idx}.jpg'
                 crop.save(os.path.join(img_dir, new_img_name))
                 f.write(f'{new_img_name}\t{label}\n')

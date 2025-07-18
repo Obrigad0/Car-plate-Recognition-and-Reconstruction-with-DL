@@ -9,7 +9,8 @@ from tqdm import tqdm
 import random
 import matplotlib.pyplot as plt
 
-# ----------------- MAPPING CARATTERI -----------------
+from model import UnifiedResNetModel
+# ------ MAPPING CARATTERI -------
 index_to_char = [
     "皖", "沪", "津", "渝", "冀", "晋", "蒙", "辽", "吉", "黑", "苏", "浙", "京", "闽", "赣", "鲁", "豫", "鄂",
     "湘", "粤", "桂", "琼", "川", "贵", "云", "藏", "陕", "甘", "青", "宁", "新", "警", "学", "O",
@@ -18,9 +19,9 @@ index_to_char = [
 ]
 char_to_index = {c: i for i, c in enumerate(index_to_char)}
 NUM_CLASSES = len(index_to_char)
-NUM_CHARS = 7  # Numero di caratteri targa
+NUM_CHARS = 7
 
-# ----------------- DATASET -----------------
+# ------ DATASET -------
 class CCPDCharCropDataset(Dataset):
     def __init__(self, images_dir, labels_path, transform=None):
         self.images_dir = images_dir
@@ -43,17 +44,12 @@ class CCPDCharCropDataset(Dataset):
         label_indices = torch.tensor([char_to_index[c] for c in label])
         return img, label_indices
 
-# ----------------- MODELLO OCR PROFONDO -----------------
+# ------ MODELLO OCR MULTI-HEAD -------
 class OCRResNetMultiHead(nn.Module):
     def __init__(self, backbone, num_chars=NUM_CHARS, num_classes=NUM_CLASSES):
         super().__init__()
-        self.backbone = backbone  # backbone già caricato e senza fc
-        if hasattr(self.backbone, 'fc') and not isinstance(self.backbone.fc, nn.Identity):
-            num_features = self.backbone.fc.in_features
-        else:
-                num_features = 512  # o il valore corretto per il tuo backbone
-
-        # Testa OCR profonda
+        self.backbone = backbone
+        num_features = backbone.fc.in_features if hasattr(backbone, 'fc') else 512
         self.ocr_head = nn.Sequential(
             nn.Linear(num_features, 1024),
             nn.BatchNorm1d(1024),
@@ -79,20 +75,21 @@ class OCRResNetMultiHead(nn.Module):
         feats = self.backbone(x)
         ocr_feats = self.ocr_head(feats)
         outs = [head(ocr_feats) for head in self.ocr_class_heads]
-        return outs  # lista di [batch, num_classes] per ogni carattere
+        return outs
 
-# ----------------- LOSS OCR MULTI-CHAR -----------------
+# ------ LOSS MULTI-CHAR -------
 def multi_char_loss(outputs, labels):
     loss = 0
     for i, out in enumerate(outputs):
         loss += F.cross_entropy(out, labels[:, i])
     return loss / len(outputs)
 
-# ----------------- TRAINING E VALIDAZIONE -----------------
+# ------ TRAIN/VALIDATION LOOP CON TQDM -------
 def train_epoch(model, loader, optimizer, device):
     model.train()
     total_loss = 0
-    for imgs, labels in tqdm(loader, desc="Train"):
+    tqdm_bar = tqdm(loader, desc="Train", leave=False)
+    for imgs, labels in tqdm_bar:
         imgs, labels = imgs.to(device), labels.to(device)
         optimizer.zero_grad()
         ocr_outputs = model(imgs)
@@ -100,26 +97,27 @@ def train_epoch(model, loader, optimizer, device):
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
+        tqdm_bar.set_postfix(loss=loss.item())
     return total_loss / len(loader)
 
 def val_epoch(model, loader, device):
     model.eval()
     total_loss = 0
+    tqdm_bar = tqdm(loader, desc="Val", leave=False)
     with torch.no_grad():
-        for imgs, labels in tqdm(loader, desc="Val"):
+        for imgs, labels in tqdm_bar:
             imgs, labels = imgs.to(device), labels.to(device)
             ocr_outputs = model(imgs)
             loss = multi_char_loss(ocr_outputs, labels)
             total_loss += loss.item()
+            tqdm_bar.set_postfix(loss=loss.item())
     return total_loss / len(loader)
 
-# ----------------- DECODE PREDICTION -----------------
 def decode_prediction(outputs):
     preds = [torch.argmax(out, dim=1) for out in outputs]
     preds = torch.stack(preds, dim=1)
     return [''.join([index_to_char[i] for i in row]) for row in preds.cpu().numpy()]
 
-# ----------------- TEST SU IMMAGINE RANDOM -----------------
 def test_on_random_image(dataset, model, device):
     model.eval()
     idx = random.randint(0, len(dataset)-1)
@@ -141,7 +139,6 @@ def test_on_random_image(dataset, model, device):
 
 # ----------------- MAIN -----------------
 def main():
-    # Sostituisci con i tuoi path reali
     train_images = 'F:/progetto computer vision/dataxricChar/train/images'
     train_labels = 'F:/progetto computer vision/dataxricChar/train/labels.txt'
     val_images = 'F:/progetto computer vision/dataxricChar/val/images'
@@ -149,45 +146,38 @@ def main():
 
     transform = transforms.Compose([
         transforms.Resize((48, 168)),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+        transforms.RandomRotation(5),
         transforms.ToTensor(),
         transforms.Normalize([0.5]*3, [0.5]*3)
     ])
 
     train_dataset = CCPDCharCropDataset(train_images, train_labels, transform)
     val_dataset = CCPDCharCropDataset(val_images, val_labels, transform)
-
-    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=12)
-    val_loader = DataLoader(val_dataset, batch_size=128, shuffle=False, num_workers=8)
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=8)
+    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=4)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # --------- CARICA BACKBONE DA FILE ----------
-    backbone = models.resnet18(pretrained=False)
-    backbone.fc = nn.Identity()
-    # Carica i pesi del backbone addestrato per detection
-    checkpoint = torch.load('./modelli/best_model.pth', map_location='cuda')
-    backbone.load_state_dict(checkpoint, strict=False)
 
-    # --------- CREA MODELLO OCR PROFONDO ----------
-    model = OCRResNetMultiHead(backbone, num_chars=NUM_CHARS, num_classes=NUM_CLASSES).to(device)
-    for name, param in model.backbone.named_parameters():
-        param.requires_grad = 'layer4' in name
-    optimizer = torch.optim.AdamW(
-        filter(lambda p: p.requires_grad, model.parameters()), #model.parameters(),
-        lr=0.001,
-        weight_decay=3e-4)
-    epochs = 20
+    model = UnifiedResNetModel(head_type="ocr",pretrained=True).to(device)
 
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=5e-5)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=1e-6)
+    epochs = 40
+
+    best_val_loss = float('inf')
     for epoch in range(epochs):
         print(f"Epoch {epoch+1}/{epochs}")
         train_loss = train_epoch(model, train_loader, optimizer, device)
         val_loss = val_epoch(model, val_loader, device)
         print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+        scheduler.step()
+        if val_loss < best_val_loss:
+            torch.save(model.state_dict(), 'ocr_best_model.pth')
+            best_val_loss = val_loss
 
-    torch.save(model.state_dict(), 'ocr_from_detection_backbone.pth')
-    print("Modello OCR salvato in ocr_from_detection_backbone.pth")
-
-    # Test su un'immagine random del validation set
+    print("Miglior modello salvato in ocr_best_model.pth")
     test_on_random_image(val_dataset, model, device)
 
 if __name__ == '__main__':

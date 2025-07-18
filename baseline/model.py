@@ -24,9 +24,19 @@ class UnifiedResNetModel(nn.Module):
 
         if head_type == 'bbox':
             self.bbox_head = nn.Sequential(
-                nn.Linear(num_features, 128),
-                nn.ReLU(),
-                nn.Linear(128, 4),
+                 nn.Linear(num_features, 512),
+                nn.BatchNorm1d(512),
+                nn.GELU(),
+                nn.Dropout(0.15),  # Ridotto grazie a molti dati
+                nn.Linear(512, 256),
+                nn.BatchNorm1d(256),
+                nn.GELU(),
+                nn.Dropout(0.10),
+                nn.Linear(256, 128),
+                nn.GELU(),
+                nn.Linear(128, 64),
+                nn.GELU(),
+                nn.Linear(64, 4),
                 nn.Sigmoid()
             )
         elif head_type == 'ocr':

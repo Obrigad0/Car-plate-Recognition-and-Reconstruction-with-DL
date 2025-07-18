@@ -126,7 +126,7 @@ def main():
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
-    epochs = 25
+    epochs = 30
     best_val_loss = float('inf')
     history = {'train_loss': [], 'val_loss': [], 'train_iou': [], 'val_iou': []}
     
