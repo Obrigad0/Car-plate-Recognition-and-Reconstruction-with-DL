@@ -178,7 +178,7 @@ def main():
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=5e-5)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=1e-6)
-    epochs = 40
+    epochs = 30
     best_val_loss = float('inf')
 
     # Per plotting
@@ -199,7 +199,7 @@ def main():
         scheduler.step()
 
         if val_loss < best_val_loss:
-            torch.save(model.state_dict(), 'ocr_best_model.pth')
+            torch.save(model.state_dict(), 'ocr_best_model_claudio_per_grafici.pth')
             best_val_loss = val_loss
 
     print("Miglior modello salvato in ocr_best_model.pth")
