@@ -8,6 +8,8 @@ import torch.nn as nn
 from tqdm import tqdm
 import os
 import numpy as np
+import matplotlib.pyplot as plt
+
 
 def calculate_iou(pred_boxes, true_boxes):
     """Calcola l'IoU (Intersection over Union) per batch di bounding box"""
@@ -166,6 +168,34 @@ def main():
     print(f"Miglior validation loss: {best_val_loss:.4f}")
     print(f"Miglior validation IoU: {max(history['val_iou']):.4f}")
     print("Modello finale salvato in 'resnet_bbox_model.pth'")
+
+ # === PLOT E SALVATAGGIO LOSS ===
+    plt.figure(figsize=(8, 6))
+    plt.plot(range(1, epochs + 1), history['train_loss'], label='Train Loss', marker='o')
+    plt.plot(range(1, epochs + 1), history['val_loss'], label='Validation Loss', marker='o')
+    plt.title('Loss durante il training')
+    plt.xlabel('Epoca')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("loss_plot.png")
+    plt.close()
+    print("✅ Grafico Loss salvato in loss_plot.png")
+
+    # === PLOT E SALVATAGGIO IoU ===
+    plt.figure(figsize=(8, 6))
+    plt.plot(range(1, epochs + 1), history['train_iou'], label='Train IoU', marker='o')
+    plt.plot(range(1, epochs + 1), history['val_iou'], label='Validation IoU', marker='o')
+    plt.title('IoU durante il training')
+    plt.xlabel('Epoca')
+    plt.ylabel('IoU')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("iou_plot.png")
+    plt.close()
+    print("✅ Grafico IoU salvato in iou_plot.png")
 
 if __name__ == "__main__":
     main()
