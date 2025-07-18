@@ -10,6 +10,7 @@ import random
 import matplotlib.pyplot as plt
 
 from model import UnifiedResNetModel
+
 # ------ MAPPING CARATTERI -------
 index_to_char = [
     "皖", "沪", "津", "渝", "冀", "晋", "蒙", "辽", "吉", "黑", "苏", "浙", "京", "闽", "赣", "鲁", "豫", "鄂",
@@ -84,7 +85,16 @@ def multi_char_loss(outputs, labels):
         loss += F.cross_entropy(out, labels[:, i])
     return loss / len(outputs)
 
-# ------ TRAIN/VALIDATION LOOP CON TQDM -------
+# ------ ACCURACY PER CHAR -------
+def multi_char_accuracy(outputs, labels):
+    correct = 0
+    total = labels.size(0) * labels.size(1)
+    for i, out in enumerate(outputs):
+        preds = torch.argmax(out, dim=1)
+        correct += (preds == labels[:, i]).sum().item()
+    return correct / total
+
+# ------ TRAIN/VAL LOOP -------
 def train_epoch(model, loader, optimizer, device):
     model.train()
     total_loss = 0
@@ -103,21 +113,26 @@ def train_epoch(model, loader, optimizer, device):
 def val_epoch(model, loader, device):
     model.eval()
     total_loss = 0
+    total_acc = 0
     tqdm_bar = tqdm(loader, desc="Val", leave=False)
     with torch.no_grad():
         for imgs, labels in tqdm_bar:
             imgs, labels = imgs.to(device), labels.to(device)
             ocr_outputs = model(imgs)
             loss = multi_char_loss(ocr_outputs, labels)
+            acc = multi_char_accuracy(ocr_outputs, labels)
             total_loss += loss.item()
-            tqdm_bar.set_postfix(loss=loss.item())
-    return total_loss / len(loader)
+            total_acc += acc
+            tqdm_bar.set_postfix(loss=loss.item(), acc=acc)
+    return total_loss / len(loader), total_acc / len(loader)
 
+# ------ DECODIFICA OUTPUT MODELLO -------
 def decode_prediction(outputs):
     preds = [torch.argmax(out, dim=1) for out in outputs]
     preds = torch.stack(preds, dim=1)
     return [''.join([index_to_char[i] for i in row]) for row in preds.cpu().numpy()]
 
+# ------ TEST VISIVO SU IMMAGINE CASUALE -------
 def test_on_random_image(dataset, model, device):
     model.eval()
     idx = random.randint(0, len(dataset)-1)
@@ -159,25 +174,61 @@ def main():
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
-    model = UnifiedResNetModel(head_type="ocr",pretrained=True).to(device)
+    model = UnifiedResNetModel(head_type="ocr", pretrained=True).to(device)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=5e-5)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=1e-6)
     epochs = 40
-
     best_val_loss = float('inf')
+
+    # Per plotting
+    train_losses = []
+    val_losses = []
+    val_accuracies = []
+
     for epoch in range(epochs):
         print(f"Epoch {epoch+1}/{epochs}")
         train_loss = train_epoch(model, train_loader, optimizer, device)
-        val_loss = val_epoch(model, val_loader, device)
-        print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+        val_loss, val_acc = val_epoch(model, val_loader, device)
+
+        train_losses.append(train_loss)
+        val_losses.append(val_loss)
+        val_accuracies.append(val_acc)
+
+        print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.4f}")
         scheduler.step()
+
         if val_loss < best_val_loss:
             torch.save(model.state_dict(), 'ocr_best_model.pth')
             best_val_loss = val_loss
 
     print("Miglior modello salvato in ocr_best_model.pth")
+
+   # --------- GRAFICO: LOSS ---------
+    plt.figure(figsize=(8, 6))
+    plt.plot(train_losses, label="Train Loss", color='blue')
+    plt.plot(val_losses, label="Val Loss", color='orange')
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Train vs Validation Loss")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("loss_plot.png")
+    plt.show()
+    
+    # --------- GRAFICO: ACCURACY ---------
+    plt.figure(figsize=(8, 6))
+    plt.plot(val_accuracies, label="Val Accuracy per Char", color='green')
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.title("Validation Accuracy per Character")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("accuracy_plot.png")
+    plt.show()
+    # --------- TEST SU IMMAGINE CASUALE ----------
     test_on_random_image(val_dataset, model, device)
 
 if __name__ == '__main__':
