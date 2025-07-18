@@ -179,7 +179,7 @@ def main():
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig("loss_plot.png")
+    plt.savefig("loss_plot_bbox.png")
     plt.close()
     print("✅ Grafico Loss salvato in loss_plot.png")
 
@@ -193,7 +193,7 @@ def main():
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig("iou_plot.png")
+    plt.savefig("iou_plot_bbox.png")
     plt.close()
     print("✅ Grafico IoU salvato in iou_plot.png")
 

@@ -115,8 +115,8 @@ def main():
     #     best_loss = checkpoint['best_loss']
     #     start_epoch = checkpoint['epoch'] + 1
 
-    for epoch in range(start_epoch, 26):
-        print(f"\nEpoch {epoch}/25")
+    for epoch in range(start_epoch, 30):
+        print(f"\nEpoch {epoch}/30")
         train_loss, train_iou = train_one_epoch(model, train_dl, bbox_giou_loss, optimizer, device)
         val_loss, val_iou     = validate(model, val_dl, bbox_giou_loss, device)
 
