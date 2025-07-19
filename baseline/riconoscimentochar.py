@@ -169,8 +169,8 @@ def main():
 
     train_dataset = CCPDCharCropDataset(train_images, train_labels, transform)
     val_dataset = CCPDCharCropDataset(val_images, val_labels, transform)
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=8)
-    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=12)
+    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=8)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -199,7 +199,7 @@ def main():
         scheduler.step()
 
         if val_loss < best_val_loss:
-            torch.save(model.state_dict(), 'ocr_best_model_claudio_per_grafici.pth')
+            torch.save(model.state_dict(), 'nuovo_ocr_Claudio_modello_aggiornato.pth')
             best_val_loss = val_loss
 
     print("Miglior modello salvato in ocr_best_model.pth")

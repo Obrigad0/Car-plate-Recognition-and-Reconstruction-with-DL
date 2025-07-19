@@ -184,7 +184,7 @@ def evaluate_model(model, dataset, device, save_dir):
 def main(): #CAMBIA IL NOME DELLA CARTELLA PER SALVARE I RISULTATI
     test_images = "F:/progetto computer vision/dataxricChar/evaluation/ccpd_blur/test/images"           # <-- MODIFICA QUESTO PATH
     test_labels = "F:/progetto computer vision/dataxricChar/evaluation/ccpd_blur/test/labels.txt"         # <-- MODIFICA QUESTO PATH
-    model_weights = "ocr_best_model_claudio_per_grafici.pth" # <-- MODIFICA SE SERVE
+    model_weights = "nuovo_ocr_Claudio_modello_aggiornato.pth" # <-- MODIFICA SE SERVE
     save_dir = "risultati_evaluation_claudio/ccpd_blur" #CAMBIA IL NOME DELLA CARTELLA PER SALVARE I RISULTATI
     #CAMBIA IL NOME DELLA CARTELLA PER SALVARE I RISULTATI
     #CAMBIA IL NOME DELLA CARTELLA PER SALVARE I RISULTATI
