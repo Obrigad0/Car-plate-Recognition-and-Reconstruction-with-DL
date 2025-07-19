@@ -7,6 +7,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from collections import Counter
 from tqdm import tqdm
+import matplotlib.font_manager as fm
 
 # --- MAPPING DEI CARATTERI, NUM_CLASSES e NUM_CHARS ---
 index_to_char = [
@@ -118,15 +119,20 @@ def evaluate_model(model, dataset, device, save_dir):
     # Istogrammi confusioni (come prima) ...
 
     if top10_chinese:
+        font_path = 'C:/Windows/Fonts/simsun.ttc'
+        simsun_font = fm.FontProperties(fname=font_path)
+
         labels = [f"{x[0]}→{x[1]}" for x, _ in top10_chinese]
         values = [v for _, v in top10_chinese]
         plt.figure(figsize=(10, 6))
         plt.barh(labels[::-1], values[::-1], color='blue')
-        plt.xlabel('Numero errori')
-        plt.title('Top 10 confusioni caratteri cinesi')
+        plt.xlabel('Numero errori', fontproperties=simsun_font)
+        plt.title('Top 10 confusioni caratteri cinesi', fontproperties=simsun_font)
+        plt.yticks(fontproperties=simsun_font)  # <- per far vedere i caratteri cinesi sugli assi
         plt.tight_layout()
         plt.savefig(os.path.join(save_dir, 'istogramma_cinesi_piu_confusi.png'))
         plt.close()
+
 
     if top10_normal:
         labels = [f"{x[0]}→{x[1]}" for x, _ in top10_normal]
@@ -181,33 +187,39 @@ def evaluate_model(model, dataset, device, save_dir):
     print(f"--------------------------\n")
 
 # --- MAIN ---
-def main(): #CAMBIA IL NOME DELLA CARTELLA PER SALVARE I RISULTATI
-    test_images = "F:/progetto computer vision/dataxricChar/evaluation/ccpd_blur/test/images"           # <-- MODIFICA QUESTO PATH
-    test_labels = "F:/progetto computer vision/dataxricChar/evaluation/ccpd_blur/test/labels.txt"         # <-- MODIFICA QUESTO PATH
-    model_weights = "nuovo_ocr_Claudio_modello_aggiornato.pth" # <-- MODIFICA SE SERVE
-    save_dir = "risultati_evaluation_claudio/ccpd_blur" #CAMBIA IL NOME DELLA CARTELLA PER SALVARE I RISULTATI
-    #CAMBIA IL NOME DELLA CARTELLA PER SALVARE I RISULTATI
-    #CAMBIA IL NOME DELLA CARTELLA PER SALVARE I RISULTATI
-    #CAMBIA IL NOME DELLA CARTELLA PER SALVARE I RISULTATI
-    #CAMBIA IL NOME DELLA CARTELLA PER SALVARE I RISULTATI
-    #CAMBIA IL NOME DELLA CARTELLA PER SALVARE I RISULTATI
-    
-    # Trasformazioni da allineare col training
+def main():
+    # PATH UNICO DELLA ROOT DEL DATASET
+    base_dir = "C:/Users/fedes/Desktop/datibellissimi/ccpd_fn"  # <-- Modifica se necessario
+    model_weights = "models/nuovo_ocr_Claudio_modello_aggiornato.pth"
+    save_dir = "results/ccpd_fn"
+
     transform = transforms.Compose([
         transforms.Resize((48, 168)),
         transforms.ToTensor(),
         transforms.Normalize([0.5]*3, [0.5]*3)
     ])
 
-    test_dataset = CCPDCharCropDataset(test_images, test_labels, transform)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # Carica il dataset train
+    train_images = os.path.join(base_dir, "train", "images")
+    train_labels = os.path.join(base_dir, "train", "labels.txt")
+    train_dataset = CCPDCharCropDataset(train_images, train_labels, transform)
 
-    # --- Inizializza modello e carica pesi ---
+    # Carica il dataset val
+    val_images = os.path.join(base_dir, "val", "images")
+    val_labels = os.path.join(base_dir, "val", "labels.txt")
+    val_dataset = CCPDCharCropDataset(val_images, val_labels, transform)
+
+    # Merge
+    from torch.utils.data import ConcatDataset
+    full_dataset = ConcatDataset([train_dataset, val_dataset])
+
+    # Device e modello
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = UnifiedResNetModel(head_type="ocr", pretrained=False).to(device)
     model.load_state_dict(torch.load(model_weights, map_location=device))
 
-    # --- Evaluation e report ---
-    evaluate_model(model, test_dataset, device, save_dir)
+    # Evaluation
+    evaluate_model(model, full_dataset, device, save_dir)
 
 if __name__ == '__main__':
     main()
