@@ -151,12 +151,17 @@ def evaluate():
     return total_loss / total_count
 
 
-# -- TRAINING e VALIDATION PRINCIPALE --
+train_losses = []
+val_losses = []
+
 best_val_loss = float("inf")
 epochs_since_lr_decay = 0
+
 for epoch in range(1, EPOCHS + 1):
     train_loss = train_one_epoch(epoch)
     val_loss = evaluate()
+    train_losses.append(train_loss)
+    val_losses.append(val_loss)
     print(f"[Epoch {epoch}] Train loss: {train_loss:.4f} | Val loss: {val_loss:.4f}")
 
     # Salva modello migliore
@@ -171,3 +176,15 @@ for epoch in range(1, EPOCHS + 1):
         adjust_lr(optimizer, DECAY_FACTOR)
         print(f"** LR decayed, nuova lr: {[g['lr'] for g in optimizer.param_groups]} **")
         epochs_since_lr_decay = 0
+
+# --- GRAFICO delle loss ---
+plt.figure(figsize=(10,5))
+plt.plot(range(1, EPOCHS + 1), train_losses, label='Train Loss')
+plt.plot(range(1, EPOCHS + 1), val_losses, label='Validation Loss')
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.title("Train & Validation Loss over Epochs")
+plt.legend()
+plt.grid(True)
+plt.savefig("loss_plot.png")  # salva il grafico su disco
+plt.show()
