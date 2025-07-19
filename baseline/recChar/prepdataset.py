@@ -69,6 +69,6 @@ def prepare_ccpd_dataset(ccpd_dir, output_dir, max_images=None, train_split=0.5)
     print("Dataset preparation complete!")
 
 if __name__ == '__main__':
-    ccpd_dir = 'F:/progetto computer vision/dataset/CCPD2019/ccpd_base'
-    output_dir = 'F:/progetto computer vision/dataxricChar'
-    prepare_ccpd_dataset(ccpd_dir, output_dir, max_images=None, train_split=0.5)
+    ccpd_dir = 'F:/progetto computer vision/dataset/CCPD2019/ccpd_blur'
+    output_dir = 'F:/progetto computer vision/dataxricChar/evaluation/ccpd_blur'
+    prepare_ccpd_dataset(ccpd_dir, output_dir, max_images=None, train_split=1)
