@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Jul 19 09:28:09 2025
+
+@author: fedes
+"""
+
 
 import torch
 import torch.nn as nn
@@ -134,7 +141,7 @@ class Encoder(nn.Module):
             x = unit(x)
         return x
 
-# --- Parallel Decoder Unit ---
+# --- Parallel Decoder Unit (NO teacher forcing / NO causal mask) ---
 class ParallelDecoderUnit(nn.Module):
     def __init__(self, d_model, n_heads, seq_len):
         super().__init__()
@@ -149,10 +156,9 @@ class ParallelDecoderUnit(nn.Module):
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
         self.norm3 = nn.LayerNorm(d_model)
-        self.seq_len = seq_len
 
     def forward(self, tgt, memory):
-        attn_output1, _ = self.mha1(tgt, tgt, tgt, attn_mask=self.generate_square_subsequent_mask(self.seq_len).to(tgt.device))
+        attn_output1, _ = self.mha1(tgt, tgt, tgt)  # No causal mask
         x = self.norm1(tgt + attn_output1)
         attn_output2, _ = self.mha2(x, memory, memory)
         x = self.norm2(x + attn_output2)
@@ -160,9 +166,6 @@ class ParallelDecoderUnit(nn.Module):
         x = self.norm3(x + x2)
         return x
 
-    def generate_square_subsequent_mask(self, sz):
-        mask = torch.triu(torch.ones(sz, sz) * float('-inf'), diagonal=1)
-        return mask
 
 # --- Parallel Decoder ---
 class ParallelDecoder(nn.Module):
@@ -176,11 +179,12 @@ class ParallelDecoder(nn.Module):
 
     def forward(self, memory):
         B = memory.size(0)
-        tgt = self.decoder_embed.expand(B, -1, -1)  # learnable input
+        tgt = self.decoder_embed.expand(B, -1, -1)  # learnable input, shape [B, seq_len, d_model]
         for unit in self.units:
-            tgt = unit(tgt, memory)
-        logits = self.classifier(tgt)
+            tgt = unit(tgt, memory)  # no mask used here
+        logits = self.classifier(tgt)  # output shape: [B, seq_len, num_classes]
         return logits
+
 
 # --- PLDPR Model ---
 class PDLPR(nn.Module):
