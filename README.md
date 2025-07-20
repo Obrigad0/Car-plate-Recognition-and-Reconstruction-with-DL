@@ -103,9 +103,11 @@ Replace "path/to/your/license_plate_image.jpg" with the path to your image file.
 
 ---
 
-## Course
 
-**Computer Vision**  
+## Course Information
+
+This project has been developed as part of the **Computer Vision** exam for the course **Artificial Intelligence and Robotics** at **Sapienza University of Rome**.
+
 Academic Year 2024/2025
 
 ## Authors
