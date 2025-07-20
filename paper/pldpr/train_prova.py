@@ -14,7 +14,7 @@ from torchvision import transforms
 from PIL import Image
 import matplotlib.pyplot as plt
 
-from pldpr import PLDPR  # Assicurati che il tuo file PLDPR.py sia corretto
+from pldpr_prova import PLDPR  # Assicurati che il tuo file PLDPR.py sia corretto
 
 # --- Configurazioni globali ---
 provinces = ["皖", "沪", "津", "渝", "冀", "晋", "蒙", "辽", "吉", "黑", "苏", "浙", "京", "闽", "赣", "鲁",
@@ -39,7 +39,7 @@ INIT_LR = 1e-3
 LR_MIN = 1e-5
 IMG_SZ = (48, 144)
 NUM_CLASSES = vocab_size
-DATA_ROOT = 'C:/Users/fedes/Desktop/ccpd_dataset'
+DATA_ROOT = 'F:\progetto computer vision\dataxricChar'
 TRAIN_DIR = os.path.join(DATA_ROOT, "train")
 VAL_DIR = os.path.join(DATA_ROOT, "val")
 
@@ -114,7 +114,7 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, epoch):
         optimizer.zero_grad()
         outputs = model(images)  # shape [B, C, T]
         outputs = outputs.permute(1, 0, 2)  # ora [T, B, C]
-        print(outputs.shape)
+        # print(outputs.shape)
 
         log_probs = outputs.log_softmax(2)
         
@@ -123,12 +123,12 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, epoch):
         
 
         # Debug stampe dimensioni
-        print(f"Batch idx: {batch_idx}")
-        print(f"images.shape: {images.shape}")           # Expected: [B, 3, H, W]
-        print(f"outputs.shape: {outputs.shape}")         # Expected: [T, B, C]
-        print(f"labels.shape: {labels.shape}")           # Expected: [B, max_label_len]
-        print(f"label_lengths.shape: {label_lengths.shape}") # Expected: [B]
-        print(f"input_lengths.shape: {input_lengths.shape}") # Expected: [B]        
+        # print(f"Batch idx: {batch_idx}")
+        # print(f"images.shape: {images.shape}")           # Expected: [B, 3, H, W]
+        # print(f"outputs.shape: {outputs.shape}")         # Expected: [T, B, C]
+        # print(f"labels.shape: {labels.shape}")           # Expected: [B, max_label_len]
+        # print(f"label_lengths.shape: {label_lengths.shape}") # Expected: [B]
+        # print(f"input_lengths.shape: {input_lengths.shape}") # Expected: [B]        
 
         loss = criterion(log_probs, labels, input_lengths, label_lengths)
         loss.backward()

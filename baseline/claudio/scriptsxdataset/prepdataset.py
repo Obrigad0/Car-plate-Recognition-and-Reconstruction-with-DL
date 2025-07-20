@@ -71,4 +71,4 @@ def prepare_ccpd_dataset(ccpd_dir, output_dir, max_images=None, train_split=0.5)
 if __name__ == '__main__':
     ccpd_dir = 'C:/Users/fedes/Downloads/CCPD2019/CCPD2019/ccpd_tilt' #CAMBIARE
     output_dir = 'C:/Users/fedes/Desktop/datibellissimi/ccpd_tilt'
-    prepare_ccpd_dataset(ccpd_dir, output_dir, max_images=None, train_split=1)
+    prepare_ccpd_dataset(ccpd_dir, output_dir, max_images=None, train_split=0.8)
