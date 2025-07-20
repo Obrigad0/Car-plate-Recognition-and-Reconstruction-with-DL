@@ -61,14 +61,35 @@ The core recognition model in this project is the **PDLPR (Positional Deep Licen
 - **Classifier:**  
   Predicts character probabilities for each position in the plate sequence, handling 68 classes (letters, digits, and special characters).
 
-### Model Usage
+## Model Usage
 
-The PDLPR model is implemented as a PyTorch `nn.Module` named `PDLPR`. It expects input images with 3 channels (RGB) and outputs the predicted logits for the license plate characters.
+This project provides two pipelines for license plate recognition. 
 
-Example instantiation:
+### Baseline Pipeline
+
+You can easily test the baseline license plate recognition pipeline on your own image by changing the `img_path` variable in the script.
 
 ```python
-model = PDLPR(in_channels=3, base_channels=512, num_classes=68, seq_len=8)
+if __name__ == "__main__":
+    # Change this path to your own image file
+    img_path = 'path/to/your/image.jpg'
+    plate, bbox = recognize_plate_full(img_path)
+    print(f"Recognized Plate: {plate}")
+    print(f"Bounding Box: {bbox}")
+```
 
-# Forward pass
-outputs = model(images)  # outputs contains predictions for each character
+## Yolov5 + PLDPR Pipeline
+
+
+### Example Usage
+
+You can test the pipeline on a single image by changing the `image_path` variable:
+
+```python
+image_path = "path/to/your/license_plate_image.jpg"
+plate_text = recognize_license_plate(image_path)
+print("Detected License Plate:", plate_text)
+```
+
+Replace "path/to/your/license_plate_image.jpg" with the path to your image file.
+
