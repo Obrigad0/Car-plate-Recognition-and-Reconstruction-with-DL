@@ -1,3 +1,4 @@
+
 import os
 import torch
 import torch.nn as nn
@@ -10,7 +11,7 @@ import torchvision.transforms.functional as TF
 import random
 import io
 import matplotlib.pyplot as plt
-from pdlpr import PDLPR
+from pdpdpd import PDLPR
 from tqdm import tqdm
 # ----------- COSTANTI CCPD -----------
 
@@ -30,25 +31,6 @@ ads = [
 
 charset = provinces + [c for c in alphabets if c not in provinces] + [str(i) for i in range(10)]
 charset = list(dict.fromkeys(charset))  # Rimuove duplicati mantenendo l'ordine
-
-# ----------- UTILITÀ PREPROCESSING -----------
-
-def parse_box_from_filename(filename):
-    # Esempio: filename = "074-153_423-245&374_263&409-..." 
-    parts = filename.split('-')
-    box_str = parts[2]  # "245&374_263&409"
-    (x1y1, x2y2) = box_str.split('_')
-    x1, y1 = map(int, x1y1.split('&'))
-    x2, y2 = map(int, x2y2.split('&'))
-    return x1, y1, x2, y2
-
-def crop_plate(img_path):
-    img = Image.open(img_path).convert("RGB")
-    filename = os.path.basename(img_path)
-    x1, y1, x2, y2 = parse_box_from_filename(filename)
-    left, top = min(x1, x2), min(y1, y2)
-    right, bottom = max(x1, x2), max(y1, y2)
-    return img.crop((left, top, right, bottom))
 
 # ----------- AUGMENTATION AVANZATA -----------
 
@@ -108,19 +90,6 @@ class FullRobustAugmentation:
 
 # ----------- DECODIFICA TARGA E TOKENIZZAZIONE -----------
 
-def decode_plate(plate_code):
-    try:
-        province = provinces[plate_code[0]]
-        letter = alphabets[plate_code[1]]
-        tail = ''.join(ads[i] for i in plate_code[2:])
-        return province + letter + tail
-    except Exception:
-        return "INVALID"
-
-def parse_filename(filename):
-    parts = filename[:-4].split('-')
-    plate_code = list(map(int, parts[4].split('_')))
-    return decode_plate(plate_code)
 
 class SimplePlateTokenizer:
     def __init__(self, charset):
@@ -143,21 +112,34 @@ seq_len = 8  # Lunghezza massima targa CCPD
 
 # ----------- DATASET CCPD -----------
 
-class CCPDPlateDataset(Dataset):
-    def __init__(self, image_folder, transform=None, max_len=8):
-        self.image_folder = image_folder
-        self.image_files = [f for f in os.listdir(image_folder) if f.endswith('.jpg')]
+class LPRDataset(Dataset):
+    def __init__(self, root_dir, transform=None, max_len=8):
+        self.image_dir = os.path.join(root_dir, "images")
+        self.labels_path = os.path.join(root_dir, "labels.txt")
         self.transform = transform if transform else FullRobustAugmentation()
         self.max_len = max_len
+
+        with open(self.labels_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        self.samples = []
+        for line in lines:
+            parts = line.strip().split()
+            if len(parts) >= 2:
+                filename, label = parts[0], ''.join(parts[1:])
+                self.samples.append((filename, label))
+            else:
+                print(f"[Warning] Riga ignorata (malformata): {line}")
+
     def __len__(self):
-        return len(self.image_files)
+        return len(self.samples)
+
     def __getitem__(self, idx):
-        filename = self.image_files[idx]
-        img_path = os.path.join(self.image_folder, filename)
-        image = crop_plate(img_path)
+        filename, label = self.samples[idx]
+        img_path = os.path.join(self.image_dir, filename)
+        image = Image.open(img_path).convert("RGB")
         image = self.transform(image)
-        label_text = parse_filename(filename)
-        return image, label_text
+        return image, label
+
 
 def collate_fn(batch):
     images, texts = zip(*batch)
@@ -179,14 +161,13 @@ def collate_fn(batch):
 # ----------- FUNZIONE TRAINING -----------
 
 def PDLPR_training(image_folder, num_epochs, batch_size=32):
-    dataset = CCPDPlateDataset(image_folder)
-    train_size = int(0.8 * len(dataset))
-    val_size = len(dataset) - train_size
-    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+    train_dataset = LPRDataset(os.path.join(image_folder, "train"))
+    val_dataset = LPRDataset(os.path.join(image_folder, "val"))
+
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
-                             collate_fn=collate_fn, num_workers=1)
+                              collate_fn=collate_fn, num_workers=1)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False,
-                           collate_fn=collate_fn, num_workers=1)
+                            collate_fn=collate_fn, num_workers=1)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
@@ -205,10 +186,6 @@ def PDLPR_training(image_folder, num_epochs, batch_size=32):
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     loss_fn = nn.CrossEntropyLoss(ignore_index=0)
     scaler = GradScaler(device="cuda")
-
-    
-
-
 
     train_losses = []
     val_losses = []
@@ -269,6 +246,8 @@ def PDLPR_training(image_folder, num_epochs, batch_size=32):
     plt.close()
     print("Salvato grafico delle loss in 'loss_plot.png'")
 
-# ----------- ESEMPIO USO -----------
-PDLPR_training("F:\progetto computer vision\dataset\CCPD2019\ccpd_base", num_epochs=30)
+if __name__ == '__main__':
+    import multiprocessing
+    multiprocessing.freeze_support()  # opzionale, ma consigliato su Windows
+    PDLPR_training("C:/Users/fedes/Desktop/ccpd_dataset", num_epochs=30)
 
