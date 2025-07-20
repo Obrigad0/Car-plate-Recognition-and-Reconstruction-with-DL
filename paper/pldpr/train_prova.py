@@ -40,14 +40,18 @@ LR_MIN = 1e-5
 IMG_SZ = (48, 144)
 NUM_CLASSES = vocab_size
 DATA_ROOT = 'C:/Users/fedes/Desktop/ccpd_dataset'
-TRAIN_LABELS = os.path.join(DATA_ROOT, "train_labels.txt")
-VAL_LABELS = os.path.join(DATA_ROOT, "val_labels.txt")
+TRAIN_DIR = os.path.join(DATA_ROOT, "train")
+VAL_DIR = os.path.join(DATA_ROOT, "val")
+
+TRAIN_LABELS = os.path.join(TRAIN_DIR, "labels.txt")
+VAL_LABELS = os.path.join(VAL_DIR, "labels.txt")
+
 
 # --- Dataset e trasformazioni ---
 class LicensePlateDataset(data.Dataset):
     def __init__(self, dir, labf, img_size, transform=None):
         self.samples = [(l.split('\t')[0], l.split('\t')[1].strip()) for l in open(labf, encoding='utf-8')]
-        self.dir = dir
+        self.dir = dir  # es: 'ccpd_dataset/train'
         self.img_size = img_size
         self.transform = transform
 
@@ -56,11 +60,13 @@ class LicensePlateDataset(data.Dataset):
 
     def __getitem__(self, i):
         n, lb = self.samples[i]
-        img = Image.open(os.path.join(self.dir, n)).convert('RGB').resize(self.img_size[::-1])
+        img_path = os.path.join(self.dir, 'images', n)
+        img = Image.open(img_path).convert('RGB').resize(self.img_size[::-1])
         if self.transform:
             img = self.transform(img)
         lab = torch.LongTensor([CHAR2IDX[c] for c in lb])
         return img, lab, len(lab)
+
 
 def get_transforms(is_train):
     aug = []
@@ -99,7 +105,8 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, epoch):
     total_loss = 0
     start_time = time.time()
 
-    for batch_idx, (images, labels, label_lengths) in enumerate(dataloader):
+    for batch_idx, (images, labels, input_lengths, label_lengths) in enumerate(dataloader):
+
         images = images.to(device)
         labels = labels.to(device)
         label_lengths = label_lengths.to(device)
@@ -248,8 +255,9 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # Datasets
-    train_ds = LicensePlateDataset(DATA_ROOT, TRAIN_LABELS, IMG_SZ, get_transforms(is_train=True))
-    val_ds = LicensePlateDataset(DATA_ROOT, VAL_LABELS, IMG_SZ, get_transforms(is_train=False))
+    train_ds = LicensePlateDataset(TRAIN_DIR, TRAIN_LABELS, IMG_SZ, get_transforms(is_train=True))
+    val_ds = LicensePlateDataset(VAL_DIR, VAL_LABELS, IMG_SZ, get_transforms(is_train=False))
+
 
     model = PLDPR(num_classes=NUM_CLASSES, dropout=0.1).to(device)
     criterion = nn.CTCLoss(blank=BLANK_IDX, reduction='mean', zero_infinity=True)
