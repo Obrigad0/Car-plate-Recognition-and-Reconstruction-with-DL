@@ -157,7 +157,8 @@ def evaluate_model(model, dataloader, device, verbose=True, print_errors=False):
     incorrect_samples = []
 
     with torch.no_grad():
-        for images, labels, label_lengths in dataloader:
+        for images, labels, input_lengths, label_lengths in dataloader:
+
             images = images.to(device)
             labels = labels.to(device)
 
@@ -169,10 +170,10 @@ def evaluate_model(model, dataloader, device, verbose=True, print_errors=False):
 
             idx = 0
             gt_strings = []
-            for i, l in enumerate(lengths_cpu):
-                label_seq = labels_cpu[i][:l]
-                # Forza conversione a lista di interi puri
-                label_seq = label_seq.tolist()  # garantisce che siano numeri base Python
+            for l in lengths_cpu:
+                label_seq = labels_cpu[idx:idx+l]
+                idx += l
+                label_seq = label_seq.tolist()
                 gt = ''.join([IDX2CHAR[c] for c in label_seq])
                 gt_strings.append(gt)
 
