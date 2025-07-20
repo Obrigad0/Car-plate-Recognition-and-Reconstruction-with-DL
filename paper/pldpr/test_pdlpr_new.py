@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.amp import autocast
 from PIL import Image, ImageFilter
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, ConcatDataset
 from torchvision import transforms
 import torchvision.transforms.functional as TF
 import random
@@ -80,6 +80,10 @@ class TestLPRDataset(Dataset):
         self.transform = transform if transform else TestTransforms()
         self.max_len = max_len
 
+        # Verifica che il file esista
+        if not os.path.exists(self.labels_path):
+            raise FileNotFoundError(f"File labels.txt non trovato in: {self.labels_path}")
+
         with open(self.labels_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
         self.samples = []
@@ -101,13 +105,71 @@ class TestLPRDataset(Dataset):
         image = self.transform(image)
         return image, label
 
+    @staticmethod
+    def load_and_concat_datasets(base_dir, transform=None, max_len=8):
+        """
+        Metodo statico per concatenare dataset train e val
+        """
+        train_dir = os.path.join(base_dir, "train")
+        val_dir = os.path.join(base_dir, "val")
+        
+        # Verifica che le directory esistano
+        if not os.path.exists(train_dir):
+            raise FileNotFoundError(f"Directory train non trovata: {train_dir}")
+        if not os.path.exists(val_dir):
+            raise FileNotFoundError(f"Directory val non trovata: {val_dir}")
+        
+        train_dataset = TestLPRDataset(train_dir, transform=transform, max_len=max_len)
+        val_dataset = TestLPRDataset(val_dir, transform=transform, max_len=max_len)
+        
+        print(f"Dataset train caricato: {len(train_dataset)} campioni")
+        print(f"Dataset val caricato: {len(val_dataset)} campioni")
+        
+        concat_dataset = ConcatDataset([train_dataset, val_dataset])
+        print(f"Dataset concatenato: {len(concat_dataset)} campioni totali")
+        
+        return concat_dataset
+
+def load_and_concat_test_datasets(base_dir, transform=None, max_len=8):
+    """
+    Carica e concatena i dataset di train e validation in un unico dataset per il testing.
+    
+    Args:
+        base_dir (str): Directory base che contiene le cartelle 'train' e 'val'
+        transform: Trasformazioni da applicare alle immagini
+        max_len (int): Lunghezza massima delle sequenze
+        
+    Returns:
+        ConcatDataset: Dataset concatenato di train + val
+    """
+    train_dir = os.path.join(base_dir, "train")
+    val_dir = os.path.join(base_dir, "val")
+    
+    # Verifica che le directory esistano
+    if not os.path.exists(train_dir):
+        raise FileNotFoundError(f"Directory train non trovata: {train_dir}")
+    if not os.path.exists(val_dir):
+        raise FileNotFoundError(f"Directory val non trovata: {val_dir}")
+    
+    # Crea i due dataset usando la tua classe TestLPRDataset
+    train_dataset = TestLPRDataset(train_dir, transform=transform, max_len=max_len)
+    val_dataset = TestLPRDataset(val_dir, transform=transform, max_len=max_len)
+    
+    print(f"Dataset train caricato: {len(train_dataset)} campioni")
+    print(f"Dataset val caricato: {len(val_dataset)} campioni")
+    
+    # Concatena i due dataset
+    concat_dataset = ConcatDataset([train_dataset, val_dataset])
+    print(f"Dataset concatenato: {len(concat_dataset)} campioni totali")
+    
+    return concat_dataset
+
 def test_collate_fn(batch):
     images, texts = zip(*batch)
     images = torch.stack(images)
     token_seqs = [torch.tensor(tokenizer.encode(t)[:seq_len] + [0]*(seq_len-len(t))) for t in texts]
     targets = torch.stack(token_seqs)
     return images, targets
-
 
 # ----------- METRICHE DI VALUTAZIONE -----------
 
@@ -228,12 +290,24 @@ def plot_confusion_matrix_per_position(all_predictions, all_targets, save_path="
 
 # ----------- FUNZIONE PRINCIPALE DI TEST -----------
 
-def PDLPR_testing(test_data_folder, model_path="pdlpr_best_model.pth", batch_size=32):
+def PDLPR_testing(test_data_folder, model_path="pdlpr_best_model.pth", batch_size=32, use_concat=True):
     """
     Funzione principale per testare il modello PDLPR
+    
+    Args:
+        test_data_folder (str): Percorso alla cartella contenente i dati di test
+        model_path (str): Percorso al file del modello trainato
+        batch_size (int): Dimensione del batch per il DataLoader
+        use_concat (bool): Se True, concatena train e val. Se False, usa solo la struttura standard.
     """
     # Carica il dataset di test
-    test_dataset = TestLPRDataset(test_data_folder)
+    if use_concat:
+        # Usa il dataset concatenato (train + val)
+        test_dataset = load_and_concat_test_datasets(test_data_folder, transform=TestTransforms())
+    else:
+        # Usa la struttura standard (solo una cartella)
+        test_dataset = TestLPRDataset(test_data_folder, transform=TestTransforms())
+    
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
                             collate_fn=test_collate_fn, num_workers=4)
 
@@ -470,11 +544,12 @@ def test_single_image(image_path, model_path="pdlpr_best_model.pth"):
     return pred_str
 
 if __name__ == '__main__':
-    # Test del modello sul dataset di test
+    # Test del modello sul dataset di test con dataset concatenato
     results = PDLPR_testing(
-        test_data_folder="F:\\progetto computer vision\\dataxricChar\\evaluation\\ccpd_weather\\train",
+        test_data_folder="F:\\progetto computer vision\\dataxricChar\\evaluation\\ccpd_weather",
         model_path="C:\\Users\\flavi\\OneDrive\\Documenti\\GitHub\\Car-plate-Recognition-and-Reconstruction-with-DL\\paper\\pldpr\\models\\pdlpr_best_model.pth",
-        batch_size=32
+        batch_size=32,
+        use_concat=True  # Usa train + val concatenati
     )
     
     # Esempio di test su singola immagine (opzionale)
