@@ -12,7 +12,7 @@ from collections import Counter
 from tqdm import tqdm
 from torchvision import transforms
 from PIL import Image
-from pdpdpd import PLDPR  # ← Assicurati che PLDPR sia definito nel file pdpdpd.py
+from pdlpr import PDLPR  
 
 # --- COSTANTI ---
 BLANK_TOKEN = '-'
@@ -146,18 +146,24 @@ def evaluate_model(model, dataset, device, save_dir):
     top10_normal = confusion_normal.most_common(10)
 
     # Grafici
+    import matplotlib.font_manager as fm
+
+    font_path = 'C:/Windows/Fonts/simsun.ttc'
+    simsun_font = fm.FontProperties(fname=font_path)
+
     def save_bar_plot(data, labels, title, filename, horizontal=False, color='blue'):
         plt.figure(figsize=(10, 6))
         if horizontal:
             plt.barh(labels[::-1], data[::-1], color=color)
-            plt.xlabel('Numero errori')
+            plt.xlabel('Numero errori', fontproperties=simsun_font)
         else:
             plt.bar(labels, data, color=color)
-            plt.xlabel('Categoria')
-        plt.title(title)
+            plt.xlabel('Categoria', fontproperties=simsun_font)
+        plt.title(title, fontproperties=simsun_font)
         plt.tight_layout()
         plt.savefig(os.path.join(save_dir, filename))
         plt.close()
+
 
     save_bar_plot(error_hist_full, list(range(SEQ_LEN + 1)), 'Errori per caratteri sbagliati (pos 2-7)', 'istogramma_errori_targa.png')
     if top10_chinese:
@@ -194,9 +200,9 @@ def evaluate_model(model, dataset, device, save_dir):
 
 # --- MAIN ---
 def main():
-    base_dir = "F:/progetto computer vision/dataxricChar/evaluation/ccpd_blur"
-    model_weights = "best_pdlpr.pth"
-    save_dir = "risultati_evaluation_pdlpr/ccpd_blur"
+    base_dir = "C:/Users/fedes/Desktop/datibellissimi/ccpd_weather"
+    model_weights = "./models/pdlpr_final.pth"
+    save_dir = "./results/ccpd_weather"
     transform = transforms.Compose([transforms.ToTensor()])
 
     # ✅ Usa train + val
@@ -204,11 +210,17 @@ def main():
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    model = PLDPR(
-        num_classes=NUM_CLASSES,
-        seq_len=SEQ_LEN,
-        dropout=0.1
-    ).to(device)
+    model = PDLPR(
+    in_channels=3,
+    base_channels=256,          # ← come nel checkpoint
+    encoder_d_model=256,        # ← come nel checkpoint
+    encoder_nhead=8,
+    encoder_height=16,
+    encoder_width=16,
+    decoder_num_layers=2,
+    num_classes=69,             # ← come nel checkpoint
+    seq_len=7                   # ← come nel checkpoint
+).to(device)
 
     model.load_state_dict(torch.load(model_weights, map_location=device))
     evaluate_model(model, full_dataset, device, save_dir)
