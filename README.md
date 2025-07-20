@@ -93,3 +93,23 @@ print("Detected License Plate:", plate_text)
 
 Replace "path/to/your/license_plate_image.jpg" with the path to your image file.
 
+## References
+
+1. Tao, L., Hong, S., Lin, Y., Chen, Y., He, P. and Tie, Z. (2024). A Real-Time License Plate Detection and Recognition Model in Unconstrained Scenarios. *Sensors*, 24(9), 2791.
+
+2. Xu, Z.; Yang, W.; Meng, A.; Lu, N.; Huang, H.; Ying, C.; Huang, L. Towards end-to-end license plate detection and recognition: A large dataset and baseline. In *Proceedings of the European Conference on Computer Vision (ECCV)*, Munich, Germany, 8–14 September 2018.
+
+3. R. K. Prajapati, Y. Bhardwaj, R. K. Jain and D. Kamal Kant Hiran, ”A Review Paper on Automatic Number Plate Recognition using Machine Learning: An In-Depth Analysis of Machine Learning Techniques in Automatic Number Plate Recognition: Opportunities and Limitations,” *2023 International Conference on Computational Intelligence, Communication Technology and Networking (CICTN)*, Ghaziabad, India, 2023, pp. 527-532.
+
+---
+
+## Course
+
+**Computer Vision**  
+Academic Year 2024/2025
+
+## Authors
+
+- Flavio Corsetti  
+- Federica Sardo 
+
