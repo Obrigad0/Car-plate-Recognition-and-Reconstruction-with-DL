@@ -1,0 +1,23 @@
+Top-10 confusioni caratteri cinesi:
+湘 -> 浙: 5 volte
+皖 -> 苏: 3 volte
+蒙 -> 豫: 3 volte
+皖 -> 豫: 3 volte
+陕 -> 皖: 2 volte
+津 -> 豫: 2 volte
+黑 -> 冀: 2 volte
+新 -> 赣: 2 volte
+贵 -> 浙: 2 volte
+晋 -> 浙: 2 volte
+
+Top-10 confusioni alfanumeriche:
+1 -> T: 9 volte
+Y -> X: 6 volte
+Y -> V: 5 volte
+7 -> Z: 5 volte
+L -> E: 4 volte
+D -> 0: 4 volte
+E -> F: 4 volte
+0 -> Q: 3 volte
+1 -> L: 3 volte
+F -> E: 3 volte

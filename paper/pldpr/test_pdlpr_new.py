@@ -291,30 +291,20 @@ def plot_confusion_matrix_per_position(all_predictions, all_targets, save_path="
 # ----------- FUNZIONE PRINCIPALE DI TEST -----------
 
 def PDLPR_testing(test_data_folder, model_path="pdlpr_best_model.pth", batch_size=32, use_concat=True):
-    """
-    Funzione principale per testare il modello PDLPR
-    
-    Args:
-        test_data_folder (str): Percorso alla cartella contenente i dati di test
-        model_path (str): Percorso al file del modello trainato
-        batch_size (int): Dimensione del batch per il DataLoader
-        use_concat (bool): Se True, concatena train e val. Se False, usa solo la struttura standard.
-    """
+    import os
+
     # Carica il dataset di test
     if use_concat:
-        # Usa il dataset concatenato (train + val)
         test_dataset = load_and_concat_test_datasets(test_data_folder, transform=TestTransforms())
     else:
-        # Usa la struttura standard (solo una cartella)
         test_dataset = TestLPRDataset(test_data_folder, transform=TestTransforms())
-    
+
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
-                            collate_fn=test_collate_fn, num_workers=4)
+                             collate_fn=test_collate_fn, num_workers=4)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Usando device: {device}")
-    
-    # Carica il modello
+
     model = PDLPR(
         in_channels=3,
         base_channels=256,
@@ -326,8 +316,7 @@ def PDLPR_testing(test_data_folder, model_path="pdlpr_best_model.pth", batch_siz
         num_classes=num_classes,
         seq_len=seq_len
     ).to(device)
-    
-    # Carica i pesi del modello
+
     if os.path.exists(model_path):
         model.load_state_dict(torch.load(model_path, map_location=device))
         print(f"Modello caricato da: {model_path}")
@@ -335,114 +324,105 @@ def PDLPR_testing(test_data_folder, model_path="pdlpr_best_model.pth", batch_siz
         print(f"ERRORE: File del modello non trovato: {model_path}")
         return
 
-    # Variabili per le metriche
     model.eval()
     total_loss = 0.0
     total_char_acc = 0.0
     total_seq_acc = 0.0
     total_edit_distance = 0.0
     total_samples = 0
-    
+
     all_predictions = []
     all_targets = []
     all_pred_strings = []
     all_gt_strings = []
-    
+
     loss_fn = nn.CrossEntropyLoss(ignore_index=0)
 
     print("Iniziando valutazione del modello...")
-    
-    with torch.no_grad():
-        pbar = tqdm(test_loader, desc="Testing", unit="batch")
-        
-        for images, targets in pbar:
-            images = images.to(device)
-            targets = targets.to(device)
-            
-            with autocast(device_type="cuda"):
-                outputs = model(images)  # [batch_size, seq_len, num_classes]
-                
-                # Calcola loss
-                output_reshaped = outputs.view(-1, outputs.size(-1))
-                targets_reshaped = targets.view(-1)
-                loss = loss_fn(output_reshaped, targets_reshaped)
-                
-                # Calcola accuratezze
-                char_acc = calculate_character_accuracy(outputs, targets)
-                seq_acc = calculate_sequence_accuracy(outputs, targets)
-                
-                # Ottieni predizioni
-                predicted = torch.argmax(outputs, dim=-1)  # [batch_size, seq_len]
-                
-                # Accumula metriche
-                total_loss += loss.item()
-                total_char_acc += char_acc
-                total_seq_acc += seq_acc
-                
-                # Calcola edit distance e salva predizioni per analisi
-                for i in range(predicted.shape[0]):
-                    pred_indices = predicted[i].cpu().numpy()
-                    target_indices = targets[i].cpu().numpy()
-                    
-                    pred_str = tokenizer.decode(pred_indices)
-                    gt_str = tokenizer.decode(target_indices)
-                    
-                    edit_dist = calculate_edit_distance(pred_str, gt_str)
-                    total_edit_distance += edit_dist
-                    total_samples += 1
-                    
-                    all_predictions.append(pred_indices.tolist())
-                    all_targets.append(target_indices.tolist())
-                    all_pred_strings.append(pred_str)
-                    all_gt_strings.append(gt_str)
-            
-            pbar.set_postfix({
-                "loss": loss.item(),
-                "char_acc": char_acc,
-                "seq_acc": seq_acc
-            })
+    pbar = tqdm(test_loader, desc="Testing", unit="batch")
 
-    # Calcola metriche finali
+    for images, targets in pbar:
+        images = images.to(device)
+        targets = targets.to(device)
+
+        with autocast(device_type="cuda"):
+            outputs = model(images)
+
+            output_reshaped = outputs.view(-1, outputs.size(-1))
+            targets_reshaped = targets.view(-1)
+            loss = loss_fn(output_reshaped, targets_reshaped)
+
+            char_acc = calculate_character_accuracy(outputs, targets)
+            seq_acc = calculate_sequence_accuracy(outputs, targets)
+
+            predicted = torch.argmax(outputs, dim=-1)
+
+            total_loss += loss.item()
+            total_char_acc += char_acc
+            total_seq_acc += seq_acc
+
+            for i in range(predicted.shape[0]):
+                pred_indices = predicted[i].cpu().numpy()
+                target_indices = targets[i].cpu().numpy()
+
+                pred_str = tokenizer.decode(pred_indices)
+                gt_str = tokenizer.decode(target_indices)
+
+                edit_dist = calculate_edit_distance(pred_str, gt_str)
+                total_edit_distance += edit_dist
+                total_samples += 1
+
+                all_predictions.append(pred_indices.tolist())
+                all_targets.append(target_indices.tolist())
+                all_pred_strings.append(pred_str)
+                all_gt_strings.append(gt_str)
+
+        pbar.set_postfix({
+            "loss": loss.item(),
+            "char_acc": char_acc,
+            "seq_acc": seq_acc
+        })
+
     avg_loss = total_loss / len(test_loader)
     avg_char_acc = total_char_acc / len(test_loader)
     avg_seq_acc = total_seq_acc / len(test_loader)
     avg_edit_distance = total_edit_distance / total_samples
 
-    # Stampa risultati
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("RISULTATI DEL TEST")
-    print("="*60)
+    print("=" * 60)
     print(f"Numero totale di campioni: {total_samples}")
     print(f"Loss medio: {avg_loss:.4f}")
-    print(f"Accuratezza per carattere: {avg_char_acc:.4f} ({avg_char_acc*100:.2f}%)")
-    print(f"Accuratezza per sequenza: {avg_seq_acc:.4f} ({avg_seq_acc*100:.2f}%)")
+    print(f"Accuratezza per carattere: {avg_char_acc:.4f} ({avg_char_acc * 100:.2f}%)")
+    print(f"Accuratezza per sequenza: {avg_seq_acc:.4f} ({avg_seq_acc * 100:.2f}%)")
     print(f"Distanza di edit media: {avg_edit_distance:.4f}")
-    print("="*60)
+    print("=" * 60)
 
-    # Analizza errori comuni
-    print("\nANALISI ERRORI:")
+    # Analisi errori
     error_count = {}
     for pred_str, gt_str in zip(all_pred_strings, all_gt_strings):
         if pred_str != gt_str:
             error_type = f"{gt_str} -> {pred_str}"
             error_count[error_type] = error_count.get(error_type, 0) + 1
-    
-    # Mostra i 10 errori più comuni
+
     sorted_errors = sorted(error_count.items(), key=lambda x: x[1], reverse=True)
     print("Errori più comuni (Top 10):")
     for i, (error, count) in enumerate(sorted_errors[:10]):
-        print(f"{i+1:2d}. {error} ({count} volte)")
+        print(f"{i + 1:2d}. {error} ({count} volte)")
 
-    # Visualizzazioni
-    print("\nGenerando visualizzazioni...")
-    
-    # 1. Predizioni su campione di test
-    visualize_predictions(test_dataset, model, device, num_samples=10)
-    
-    # 2. Matrice di confusione per posizioni
-    plot_confusion_matrix_per_position(all_predictions, all_targets)
-    
-    # 3. Distribuzione delle distanze di edit
+    # Crea cartella risultati
+    output_dir = "./results/challenge"
+    os.makedirs(output_dir, exist_ok=True)
+
+    # 1. Predizioni esempio
+    visualize_predictions(test_dataset, model, device, num_samples=10,
+                          save_path=os.path.join(output_dir, "test_predictions.png"))
+
+    # 2. Matrici di confusione
+    plot_confusion_matrix_per_position(all_predictions, all_targets,
+                                       save_path=os.path.join(output_dir, "position_confusion_matrices.png"))
+
+    # 3. Edit distance distribution
     edit_distances = [calculate_edit_distance(pred, gt) for pred, gt in zip(all_pred_strings, all_gt_strings)]
     plt.figure(figsize=(10, 6))
     plt.hist(edit_distances, bins=range(max(edit_distances) + 2), alpha=0.7, edgecolor='black')
@@ -450,25 +430,22 @@ def PDLPR_testing(test_data_folder, model_path="pdlpr_best_model.pth", batch_siz
     plt.ylabel('Frequenza')
     plt.title('Distribuzione delle Distanze di Edit')
     plt.grid(True, alpha=0.3)
-    plt.savefig("edit_distance_distribution.png", dpi=300, bbox_inches='tight')
-    plt.show()
-    
+    plt.savefig(os.path.join(output_dir, "edit_distance_distribution.png"), dpi=300, bbox_inches='tight')
+    plt.close()
+
     # 4. Accuratezza per posizione
     position_accuracies = []
     for pos in range(seq_len):
         pos_correct = 0
         pos_total = 0
         for pred, target in zip(all_predictions, all_targets):
-            if pos < len(target) and target[pos] != 0:  # Esclude padding
+            if pos < len(target) and target[pos] != 0:
                 if pos < len(pred) and pred[pos] == target[pos]:
                     pos_correct += 1
                 pos_total += 1
-        
-        if pos_total > 0:
-            position_accuracies.append(pos_correct / pos_total)
-        else:
-            position_accuracies.append(0.0)
-    
+        acc = pos_correct / pos_total if pos_total > 0 else 0.0
+        position_accuracies.append(acc)
+
     plt.figure(figsize=(10, 6))
     plt.bar(range(1, seq_len + 1), position_accuracies, alpha=0.7)
     plt.xlabel('Posizione del Carattere')
@@ -478,76 +455,74 @@ def PDLPR_testing(test_data_folder, model_path="pdlpr_best_model.pth", batch_siz
     plt.grid(True, alpha=0.3, axis='y')
     for i, acc in enumerate(position_accuracies):
         plt.text(i + 1, acc + 0.01, f'{acc:.3f}', ha='center', va='bottom')
-    plt.savefig("position_accuracy.png", dpi=300, bbox_inches='tight')
-    plt.show()
+    plt.savefig(os.path.join(output_dir, "position_accuracy.png"), dpi=300, bbox_inches='tight')
+    plt.close()
 
-    print("\nTest completato! File generati:")
-    print("- test_predictions.png (Campione di predizioni)")
-    print("- position_confusion_matrices.png (Matrici di confusione per posizione)")
-    print("- edit_distance_distribution.png (Distribuzione distanze di edit)")
-    print("- position_accuracy.png (Accuratezza per posizione)")
+    # 5. Confusioni top-10
+    def top_confusions(all_predictions, all_targets, tokenizer, output_path):
+        confusion_dict = {}
+        for pred_seq, target_seq in zip(all_predictions, all_targets):
+            for p, t in zip(pred_seq, target_seq):
+                if t != 0 and p != t:
+                    true_char = tokenizer.idx2char.get(t, '')
+                    pred_char = tokenizer.idx2char.get(p, '')
+                    if true_char and pred_char:
+                        key = f"{true_char} -> {pred_char}"
+                        confusion_dict[key] = confusion_dict.get(key, 0) + 1
+
+        sorted_conf = sorted(confusion_dict.items(), key=lambda x: x[1], reverse=True)
+
+        chinese_conf = [c for c in sorted_conf if c[0][0] in provinces][:10]
+        alphanum_conf = [c for c in sorted_conf if c[0][0] in alphabets + [str(i) for i in range(10)]][:10]
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write("Top-10 confusioni caratteri cinesi:\n")
+            for c, n in chinese_conf:
+                f.write(f"{c}: {n} volte\n")
+            f.write("\nTop-10 confusioni alfanumeriche:\n")
+            for c, n in alphanum_conf:
+                f.write(f"{c}: {n} volte\n")
+
+    top_confusions(all_predictions, all_targets, tokenizer,
+                   output_path=os.path.join(output_dir, "top_confusions.txt"))
+
+    # 6. Report testuale
+    report_path = os.path.join(output_dir, "report_finale.txt")
+    with open(report_path, 'w', encoding='utf-8') as f:
+        f.write("====== REPORT TEST PDLPR ======\n")
+        f.write(f"Totale campioni: {total_samples}\n")
+        f.write(f"Loss medio: {avg_loss:.4f}\n")
+        f.write(f"Accuratezza per carattere: {avg_char_acc:.4f} ({avg_char_acc * 100:.2f}%)\n")
+        f.write(f"Accuratezza per sequenza: {avg_seq_acc:.4f} ({avg_seq_acc * 100:.2f}%)\n")
+        f.write(f"Distanza di edit media: {avg_edit_distance:.4f}\n\n")
+        f.write("Errori più comuni (Top 10):\n")
+        for i, (error, count) in enumerate(sorted_errors[:10]):
+            f.write(f"{i + 1:2d}. {error} ({count} volte)\n")
+
+        f.write("\nAccuratezza per posizione:\n")
+        for i, acc in enumerate(position_accuracies):
+            f.write(f"Pos {i + 1}: {acc:.4f}\n")
+
+    print(f"\nRisultati salvati nella cartella '{output_dir}'")
 
     return {
-        'avg_loss': avg_loss,
-        'avg_char_acc': avg_char_acc,
-        'avg_seq_acc': avg_seq_acc,
-        'avg_edit_distance': avg_edit_distance,
-        'total_samples': total_samples,
-        'predictions': all_pred_strings,
-        'ground_truth': all_gt_strings
+        "avg_loss": avg_loss,
+        "avg_char_acc": avg_char_acc,
+        "avg_seq_acc": avg_seq_acc,
+        "avg_edit_distance": avg_edit_distance,
+        "error_count": error_count,
+        "position_accuracies": position_accuracies,
     }
 
-# ----------- TEST SU SINGOLA IMMAGINE -----------
 
-def test_single_image(image_path, model_path="pdlpr_best_model.pth"):
-    """
-    Testa il modello su una singola immagine
-    """
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    # Carica il modello
-    model = PDLPR(
-        in_channels=3,
-        base_channels=256,
-        encoder_d_model=256,
-        encoder_nhead=4,
-        encoder_height=16,
-        encoder_width=16,
-        decoder_num_layers=2,
-        num_classes=num_classes,
-        seq_len=seq_len
-    ).to(device)
-    
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    model.eval()
-    
-    # Preprocessa l'immagine
-    transform = TestTransforms()
-    image = Image.open(image_path).convert("RGB")
-    image_tensor = transform(image).unsqueeze(0).to(device)
-    
-    # Predizione
-    with torch.no_grad():
-        output = model(image_tensor)
-        predicted_indices = torch.argmax(output, dim=-1).squeeze(0)
-        pred_str = tokenizer.decode(predicted_indices.cpu().numpy())
-    
-    # Visualizza risultato
-    plt.figure(figsize=(10, 4))
-    plt.imshow(image)
-    plt.title(f"Targa riconosciuta: {pred_str}")
-    plt.axis('off')
-    plt.tight_layout()
-    plt.show()
-    
-    print(f"Targa riconosciuta: {pred_str}")
-    return pred_str
+
+
 
 if __name__ == '__main__':
     # Test del modello sul dataset di test con dataset concatenato
     results = PDLPR_testing(
-        test_data_folder="F:\\progetto computer vision\\dataxricChar\\evaluation\\ccpd_weather",
-        model_path="C:\\Users\\flavi\\OneDrive\\Documenti\\GitHub\\Car-plate-Recognition-and-Reconstruction-with-DL\\paper\\pldpr\\models\\pdlpr_best_model.pth",
+        test_data_folder="C:/Users/fedes/Desktop/datibellissimi/ccpd_challenge",
+        model_path="C:/Users/fedes/Desktop/fishing-game/Car-plate-Recognition-and-Reconstruction-with-DL/paper/pldpr/models/pdlpr_best_model.pth",
         batch_size=32,
         use_concat=True  # Usa train + val concatenati
     )

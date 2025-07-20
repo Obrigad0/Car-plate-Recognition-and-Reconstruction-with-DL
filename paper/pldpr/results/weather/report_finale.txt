@@ -1,0 +1,28 @@
+====== REPORT TEST PDLPR ======
+Totale campioni: 9999
+Loss medio: 0.0080
+Accuratezza per carattere: 0.9978 (99.78%)
+Accuratezza per sequenza: 0.9846 (98.46%)
+Distanza di edit media: 1.0153
+
+Errori più comuni (Top 10):
+ 1. 皖AJ0Z77 -> 皖AJ0Z777 (4 volte)
+ 2. 皖AJC419 -> 皖AJC4199 (4 volte)
+ 3. 皖AZ930T -> 皖AZ930TT (4 volte)
+ 4. 皖AV8L56 -> 皖AV8L566 (3 volte)
+ 5. 皖ASN603 -> 皖ASN6033 (3 volte)
+ 6. 皖AHG022 -> 皖AHG0222 (3 volte)
+ 7. 皖AJ2H06 -> 皖AJ2H066 (3 volte)
+ 8. 皖AC0K89 -> 皖AC0K899 (3 volte)
+ 9. 皖AA898K -> 皖AA898KK (3 volte)
+10. 皖A5G682 -> 皖A5G6822 (3 volte)
+
+Accuratezza per posizione:
+Pos 1: 0.9946
+Pos 2: 0.9995
+Pos 3: 0.9969
+Pos 4: 0.9979
+Pos 5: 0.9989
+Pos 6: 0.9981
+Pos 7: 0.9984
+Pos 8: 0.0000
