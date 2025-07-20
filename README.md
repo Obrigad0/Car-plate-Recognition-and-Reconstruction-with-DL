@@ -6,7 +6,7 @@ This project tackles the problem of automatic vehicle license plate recognition 
 
 The implemented architecture consists of two main stages:  
 - **License plate detection:** using a YOLOv5 model for fast and accurate localization of the plate within the vehicle image.  
-- **License plate recognition:** using a specialized PDLPR model to decode the sequence of alphanumeric characters on the plate.
+- **License plate recognition:** using a specialized PLDPR model to decode the sequence of alphanumeric characters on the plate.
 
 Additionally, a **baseline model** based on a unified ResNet18 architecture is implemented, capable of performing both bounding box regression and multi-head OCR recognition.
 
@@ -40,9 +40,9 @@ Make sure you have a compatible PyTorch version installed (YOLOv5 recommends PyT
 
 You can then integrate the YOLOv5 detection model with the rest of this project for plate localization.
 
-## PDLPR Model
+## PLDPR Model
 
-The core recognition model in this project is the **PDLPR (Positional Deep License Plate Recognition)** network, which combines convolutional feature extraction with transformer-based encoder-decoder layers to accurately decode the alphanumeric characters on the detected license plates.
+The core recognition model in this project is the **PLDPR (Positional Deep License Plate Recognition)** network, which combines convolutional feature extraction with transformer-based encoder-decoder layers to accurately decode the alphanumeric characters on the detected license plates.
 
 ### Architecture Overview
 
