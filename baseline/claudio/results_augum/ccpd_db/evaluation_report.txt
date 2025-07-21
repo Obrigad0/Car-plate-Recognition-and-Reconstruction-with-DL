@@ -1,16 +1,8 @@
 --- RISULTATI EVALUATION OCR TARGA ---
 Campioni testati: 10132
-Accuratezza targa perfetta: 67.81%  (6871 su 10132)
+Accuratezza targa perfetta: 76.41% 
 Accuratezza media per carattere: 93.28%
 Numero medio di caratteri sbagliati per targa: 0.47
-Distribuzione errori caratteri sbagliati per targa (pos 2-7):
-  0 caratteri sbagliati: 7341 (72.45%)
-  1 caratteri sbagliati: 2025 (19.99%)
-  2 caratteri sbagliati: 513 (5.06%)
-  3 caratteri sbagliati: 162 (1.60%)
-  4 caratteri sbagliati: 55 (0.54%)
-  5 caratteri sbagliati: 30 (0.30%)
-  6 caratteri sbagliati: 6 (0.06%)
 
 Top 10 confusioni caratteri cinesi:
   浙 → 苏: 92
