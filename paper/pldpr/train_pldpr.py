@@ -30,9 +30,8 @@ ads = [
 ]
 
 charset = provinces + [c for c in alphabets if c not in provinces] + [str(i) for i in range(10)]
-charset = list(dict.fromkeys(charset))  # Rimuove duplicati mantenendo l'ordine
+charset = list(dict.fromkeys(charset)) 
 
-# ----------- AUGMENTATION AVANZATA -----------
 
 class FullRobustAugmentation:
     def __init__(self):
@@ -88,7 +87,6 @@ class FullRobustAugmentation:
         buffer.seek(0)
         return Image.open(buffer)
 
-# ----------- DECODIFICA TARGA E TOKENIZZAZIONE -----------
 
 class SimplePlateTokenizer:
     def __init__(self, charset):
@@ -110,9 +108,8 @@ class SimplePlateTokenizer:
 
 tokenizer = SimplePlateTokenizer(charset)
 num_classes = tokenizer.vocab_size()
-seq_len = 8  # Lunghezza massima targa CCPD
+seq_len = 8  
 
-# ----------- DATASET CCPD -----------
 
 class LPRDataset(Dataset):
     def __init__(self, root_dir, transform=None, max_len=8):
@@ -130,7 +127,7 @@ class LPRDataset(Dataset):
                 filename, label = parts[0], ''.join(parts[1:])
                 self.samples.append((filename, label))
             else:
-                print(f"[Warning] Riga ignorata (malformata): {line}")
+                print(f"[Warning]: {line}")
 
     def __len__(self):
         return len(self.samples)
@@ -148,7 +145,6 @@ def collate_fn(batch):
     token_seqs = [torch.tensor(tokenizer.encode(t)[:seq_len] + [0]*(seq_len-len(t))) for t in texts]
     targets = torch.stack(token_seqs)
     if (targets >= num_classes).any() or (targets < 0).any():
-        print("[ERROR] Target fuori range! Ecco alcune label e codifiche:")
         for t in texts:
             print("Label:", t, "Encoded:", tokenizer.encode(t))
         print("Target tensor:", targets)
@@ -156,19 +152,12 @@ def collate_fn(batch):
         raise ValueError("Target fuori range per CrossEntropyLoss!")
     return images, targets
 
-# ----------- CALCOLO ACCURATEZZA -----------
-
 def calculate_sequence_accuracy(outputs, targets):
-    """
-    Calcola l'accuratezza per sequenza completa (targa intera corretta)
-    """
     batch_size, seq_len, num_classes = outputs.shape
-    predicted = torch.argmax(outputs, dim=-1)  # [batch_size, seq_len]
+    predicted = torch.argmax(outputs, dim=-1) 
     
-    # Confronta sequenza per sequenza
     correct_sequences = 0
     for i in range(batch_size):
-        # Considera solo i token non-padding (target != 0)
         mask = targets[i] != 0
         if torch.all(predicted[i][mask] == targets[i][mask]):
             correct_sequences += 1
@@ -176,44 +165,34 @@ def calculate_sequence_accuracy(outputs, targets):
     return correct_sequences / batch_size
 
 def calculate_character_accuracy(outputs, targets):
-    """
-    Calcola l'accuratezza per singolo carattere
-    """
-    predicted = torch.argmax(outputs, dim=-1)  # [batch_size, seq_len]
+    predicted = torch.argmax(outputs, dim=-1)  
     
-    # Maschera per escludere i token di padding
     mask = targets != 0
     
-    # Conta i caratteri corretti (escludendo padding)
     correct_chars = ((predicted == targets) & mask).sum().item()
     total_chars = mask.sum().item()
     
     return correct_chars / total_chars if total_chars > 0 else 0.0
 
-# ----------- TEST SU IMMAGINE CASUALE -----------
-
 def test_on_random_image(dataset, model, device):
-    """
-    Testa il modello su un'immagine casuale dal dataset
-    """
     model.eval()
     idx = random.randint(0, len(dataset) - 1)
     image, label = dataset[idx]
     
-    # Prepara l'input
+
     image_input = image.unsqueeze(0).to(device)
     
     with torch.no_grad():
-        output = model(image_input)  # [1, seq_len, num_classes]
-        predicted_indices = torch.argmax(output, dim=-1).squeeze(0)  # [seq_len]
+        output = model(image_input) 
+        predicted_indices = torch.argmax(output, dim=-1).squeeze(0)  
         
-        # Decodifica la predizione
+       
         pred_str = tokenizer.decode(predicted_indices.cpu().numpy())
         gt_str = label
         
-        # Visualizza l'immagine
+        
         img_np = image.permute(1, 2, 0).cpu().numpy()
-        img_np = (img_np * 0.5 + 0.5).clip(0, 1)  # Denormalizza se necessario
+        img_np = (img_np * 0.5 + 0.5).clip(0, 1) 
         
         plt.figure(figsize=(10, 4))
         plt.imshow(img_np)
@@ -225,7 +204,6 @@ def test_on_random_image(dataset, model, device):
         print('Caratteri riconosciuti:', pred_str)
         print('Ground Truth:', gt_str)
 
-# ----------- FUNZIONE TRAINING MODIFICATA -----------
 
 def PDLPR_training(image_folder, num_epochs, batch_size=32):
     train_dataset = LPRDataset(os.path.join(image_folder, "train"))
@@ -254,7 +232,6 @@ def PDLPR_training(image_folder, num_epochs, batch_size=32):
     loss_fn = nn.CrossEntropyLoss(ignore_index=0)
     scaler = GradScaler(device="cuda")
 
-    # Liste per tracking delle metriche
     train_losses = []
     val_losses = []
     val_char_accuracies = []
@@ -263,7 +240,6 @@ def PDLPR_training(image_folder, num_epochs, batch_size=32):
     best_val_loss = float('inf')
 
     for epoch in range(num_epochs):
-        # TRAINING
         model.train()
         running_loss = 0.0
         pbar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{num_epochs} [Train]", unit="batch")
@@ -275,8 +251,7 @@ def PDLPR_training(image_folder, num_epochs, batch_size=32):
             optimizer.zero_grad()
             
             with autocast(device_type="cuda"):
-                output = model(images)  # [batch_size, seq_len, num_classes]
-                # Reshape per CrossEntropyLoss: [batch_size * seq_len, num_classes]
+                output = model(images)
                 output_reshaped = output.view(-1, output.size(-1))
                 targets_reshaped = targets.view(-1)
                 loss = loss_fn(output_reshaped, targets_reshaped)
@@ -292,7 +267,6 @@ def PDLPR_training(image_folder, num_epochs, batch_size=32):
         train_losses.append(avg_train_loss)
         print(f"Epoch [{epoch + 1}/{num_epochs}] - Train Loss: {avg_train_loss:.4f}")
 
-        # VALIDATION
         model.eval()
         val_loss = 0.0
         total_char_acc = 0.0
@@ -344,7 +318,6 @@ def PDLPR_training(image_folder, num_epochs, batch_size=32):
             best_val_loss = avg_val_loss
             print("Miglior modello salvato in pdlpr_best_model.pth")
 
-    # Salva il modello finale
     torch.save(model.state_dict(), "pdlpr_final.pth")
 
     # --------- GRAFICO 1: TRAIN vs VALIDATION LOSS ---------

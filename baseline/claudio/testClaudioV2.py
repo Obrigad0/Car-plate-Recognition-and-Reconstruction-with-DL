@@ -189,12 +189,12 @@ def evaluate_model(model, dataset, device, save_dir):
 # --- MAIN ---
 def main():
     # PATH UNICO DELLA ROOT DEL DATASET
-    base_dir = "C:/Users/fedes/Desktop/datibellissimi/ccpd_fn"  # <-- Modifica se necessario
-    model_weights = "models/nuovo_ocr_Claudio_modello_aggiornato.pth"
-    save_dir = "results/ccpd_fn"
+    base_dir = "F:\progetto computer vision\dataxricChar\evaluation\ccpd_rotate"  # <-- Modifica se necessario
+    model_weights = "ocr_best_model_claudio_augum.pth"
+    save_dir = "results_augum/ccpd_rotate"
 
     transform = transforms.Compose([
-        transforms.Resize((48, 168)),
+        transforms.Resize((48, 144)),
         transforms.ToTensor(),
         transforms.Normalize([0.5]*3, [0.5]*3)
     ])

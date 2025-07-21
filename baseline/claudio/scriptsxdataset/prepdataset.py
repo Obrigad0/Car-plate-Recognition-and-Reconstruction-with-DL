@@ -69,6 +69,6 @@ def prepare_ccpd_dataset(ccpd_dir, output_dir, max_images=None, train_split=0.5)
     print("Dataset preparation complete!")
 
 if __name__ == '__main__':
-    ccpd_dir = 'F:\progetto computer vision\dataset\CCPD2019\ccpd_weather' #CAMBIARE
-    output_dir = 'F:\progetto computer vision\dataxricChar\evaluation\ccpd_weather'
+    ccpd_dir = 'F:\progetto computer vision\dataset\CCPD2019\ccpd_rotate' #CAMBIARE
+    output_dir = 'F:\progetto computer vision\dataxricChar\evaluation\ccpd_rotate'
     prepare_ccpd_dataset(ccpd_dir, output_dir, max_images=None, train_split=0.5)
