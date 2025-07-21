@@ -1,0 +1,23 @@
+Top-10 confusioni caratteri cinesi:
+皖 -> 苏: 116 volte
+皖 -> 沪: 36 volte
+皖 -> 浙: 33 volte
+皖 -> 赣: 26 volte
+皖 -> 鄂: 23 volte
+皖 -> 川: 16 volte
+苏 -> 皖: 12 volte
+皖 -> 粤: 10 volte
+皖 -> 豫: 10 volte
+皖 -> 闽: 9 volte
+
+Top-10 confusioni alfanumeriche:
+0 -> D: 136 volte
+Z -> 2: 95 volte
+D -> 0: 91 volte
+6 -> 8: 60 volte
+9 -> 8: 57 volte
+3 -> 5: 54 volte
+9 -> 5: 50 volte
+8 -> B: 49 volte
+7 -> 2: 48 volte
+S -> 5: 48 volte

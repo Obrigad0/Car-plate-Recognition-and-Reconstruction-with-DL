@@ -411,7 +411,7 @@ def PDLPR_testing(test_data_folder, model_path="pdlpr_best_model.pth", batch_siz
         print(f"{i + 1:2d}. {error} ({count} volte)")
 
     # Crea cartella risultati
-    output_dir = "./results/rotate"
+    output_dir = "./results/blur"
     os.makedirs(output_dir, exist_ok=True)
 
     # 1. Predizioni esempio
@@ -521,7 +521,7 @@ def PDLPR_testing(test_data_folder, model_path="pdlpr_best_model.pth", batch_siz
 if __name__ == '__main__':
     # Test del modello sul dataset di test con dataset concatenato
     results = PDLPR_testing(
-        test_data_folder="C:/Users/fedes/Desktop/datibellissimi/ccpd_rotate",
+        test_data_folder="C:/Users/fedes/Desktop/datibellissimi/ccpd_blur",
         model_path="C:/Users/fedes/Desktop/fishing-game/Car-plate-Recognition-and-Reconstruction-with-DL/paper/pldpr/models/pdlpr_best_model.pth",
         batch_size=32,
         use_concat=True  # Usa train + val concatenati
