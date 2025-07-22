@@ -18,12 +18,11 @@ Additionally, a **baseline model** based on a unified ResNet18 architecture is i
 
 The baseline is implemented with the `UnifiedResNetModel` PyTorch class:
 
-- Backbone: ResNet18 (pretrained or trained from scratch)  
-- Two possible head types:  
+- Same convolutional architecture: ResNet18 (pretrained or trained from scratch)  
+- Used in two different ways:  
   - **bbox:** bounding box regression head predicting 4 coordinates  
   - **ocr:** multi-head OCR, with one classification head per character (7 characters per plate, 68 possible classes per character)
 
-The model supports saving and loading backbone and head weights separately for modularity.
 
 ## YOLOv5 Installation
 
